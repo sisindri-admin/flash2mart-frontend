@@ -32,6 +32,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
     });
 
     try {
+      // Android Emulator అయితే http://10.0.2.2:3000/api/delivery/login వాడాలి
       final url = Uri.parse('https://flash2mart-backend-production.up.railway.app/api/delivery/login');
 
       final response = await http.post(
@@ -49,16 +50,18 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(responseData['message'] ?? 'Login Successful!')),
         );
+        
+        // ఇక్కడ లాగిన్ అయ్యాక హోమ్ స్క్రీన్ లేదా డాష్‌బోర్డ్‌కి నావిగేట్ చేయవచ్చు
+        // ఉదాహరణకు: 
+        // Navigator.pushReplacement(context, MaterialPageRoute(builder: (context) => DeliveryHomeScreen()));
       } else {
-        // సర్వర్ నుండి వచ్చే అసలు ఎర్రర్ మెసేజ్ ఇక్కడ చూపిస్తుంది
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(responseData['message'] ?? 'Login Failed!')),
         );
       }
     } catch (e) {
-      // నెట్‌వర్క్ లేదా కోడింగ్ ఎర్రర్ ఇక్కడ ప్రింట్ అవుతుంది
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('నెట్‌వర్క్ ఎర్రర్: ${e.toString()}')),
+        const SnackBar(content: Text('నెట్‌వర్క్ ఎర్రర్: సర్వర్‌తో కనెక్షన్ కాలేదు')),
       );
     } finally {
       setState(() {
