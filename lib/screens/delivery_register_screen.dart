@@ -37,7 +37,7 @@ class _DeliveryRegisterScreenState extends State<DeliveryRegisterScreen> {
     try {
       // మీ బ్యాెకెండ్ URL (Android Emulator అయితే http://10.0.2.2:3000/api/delivery/register వాడాలి)
       // Real Device అయితే మీ కంప్యూటర్ IP Address ఇవ్వాలి (ഉदा: http://192.168.x.x:3000/...)
-      final url = Uri.parse('http://192.168.29.222:3000/api/delivery/register');
+      final url = Uri.parse('https://flash2mart-backend-production.up.railway.app/api/delivery/register');
 
       final response = await http.post(
         url,

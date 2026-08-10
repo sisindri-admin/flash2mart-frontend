@@ -33,7 +33,7 @@ class _DeliveryLoginScreenState extends State<DeliveryLoginScreen> {
 
     try {
       // Android Emulator అయితే http://10.0.2.2:3000/api/delivery/login వాడాలి
-      final url = Uri.parse('http://192.168.29.222:3000/api/delivery/login');
+      final url = Uri.parse('https://flash2mart-backend-production.up.railway.app/api/delivery/login');
 
       final response = await http.post(
         url,
