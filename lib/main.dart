@@ -1,5 +1,8 @@
 import 'package:flutter/material.dart';
+import 'constants/app_colors.dart';
 import 'screens/splash_screen.dart';
+import 'screens/merchant_auth_screen.dart';
+import 'screens/merchant_dashboard.dart';
 
 void main() {
   runApp(const Flash2MartApp());
@@ -14,10 +17,24 @@ class Flash2MartApp extends StatelessWidget {
       title: 'Flash2Mart',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
-        primarySwatch: Colors.blue,
-        scaffoldBackgroundColor: Colors.white,
+        useMaterial3: true,
+        scaffoldBackgroundColor: AppColors.background,
+        primaryColor: AppColors.primary,
+        fontFamily: 'Roboto',
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: AppColors.primary,
+          primary: AppColors.primary,
+          secondary: AppColors.secondary,
+        ),
       ),
+      // మొదట చూపించాల్సిన స్క్రీన్
       home: const SplashScreen(),
+      
+      // పేజీ నావిగేషన్ Routes
+      routes: {
+        '/auth': (context) => const MerchantAuthScreen(),
+        '/dashboard': (context) => const MerchantDashboardScreen(),
+      },
     );
   }
 }

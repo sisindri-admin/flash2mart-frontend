@@ -1,5 +1,6 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
-import 'role_selection_screen.dart'; // మనం త్వరలో క్రియేట్ చేద్దాం
+import '../constants/app_colors.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -12,51 +13,65 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // 3 సెకన్ల తర్వాత ఆటోమేటిక్‌గా లాగిన్ స్క్రీన్‌కి వెళ్తుంది
-    Future.delayed(const Duration(seconds: 3), () {
-      Navigator.pushReplacement(
-        context,
-        MaterialPageRoute(builder: (context) => const RoleSelectionScreen()),
-      );
+    // 2 సెకన్ల తర్వాత Auth Screen కి వెళ్తుంది
+    Timer(const Duration(seconds: 2), () {
+      Navigator.pushReplacementNamed(context, '/auth');
     });
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: Colors.blue.shade900,
+      backgroundColor: AppColors.darkBlue,
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // లోగో ఐకాన్ లేదా ఇమేజ్
-            const Icon(
-              Icons.flash_on,
-              size: 100,
-              color: Colors.orangeAccent,
+            // App Logo Icon Box
+            Container(
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.primary.withOpacity(0.3),
+                    blurRadius: 20,
+                    offset: const Offset(0, 10),
+                  )
+                ],
+              ),
+              child: const Icon(
+                Icons.flash_on,
+                size: 60,
+                color: AppColors.primary,
+              ),
             ),
             const SizedBox(height: 20),
-            const Text(
-              'Flash2Mart',
-              style: TextStyle(
-                fontSize: 32,
-                fontWeight: FontWeight.bold,
-                color: Colors.white,
-                letterSpacing: 1.5,
+            
+            // App Title
+            RichText(
+              text: const TextSpan(
+                style: TextStyle(fontSize: 30, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: 'Flash', style: TextStyle(color: Colors.blue)),
+                  TextSpan(text: '2', style: TextStyle(color: Colors.red)),
+                  TextSpan(text: 'Mart', style: TextStyle(color: Colors.white)),
+                ],
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 8),
             const Text(
-              'Quick Commerce & Delivery',
-              style: TextStyle(
-                fontSize: 16,
-                color: Colors.white70,
-              ),
+              'Everything you need, delivered faster',
+              style: TextStyle(color: AppColors.textGrey, fontSize: 12),
             ),
             const SizedBox(height: 40),
+            
+            // Loading Indicator
             const CircularProgressIndicator(
-              color: Colors.orangeAccent,
-            ),
+              color: AppColors.secondary,
+              strokeWidth: 3,
+            )
           ],
         ),
       ),
