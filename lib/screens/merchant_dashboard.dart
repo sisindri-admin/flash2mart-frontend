@@ -26,4 +26,3 @@ class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
     );
   }
 }
-
