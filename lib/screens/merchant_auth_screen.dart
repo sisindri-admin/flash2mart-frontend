@@ -30,7 +30,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     _tabController = TabController(length: 2, vsync: this);
   }
 
-  @override;
+  @override
   void dispose() {
     _tabController.dispose();
     super.dispose();
