@@ -165,7 +165,10 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
           const SizedBox(height: 10),
           CustomButton(
             text: 'LOGIN TO PARTNER PORTAL',
-            onPressed: () {},
+            onPressed: () {
+              // Dashboard కి నావిగేట్ చేయడం
+              Navigator.pushReplacementNamed(context, '/dashboard');
+            },
           ),
         ],
       ),
@@ -258,7 +261,10 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
           const SizedBox(height: 24),
           CustomButton(
             text: 'REGISTER AS PARTNER',
-            onPressed: () {},
+            onPressed: () {
+              // Dashboard కి నావిగేట్ చేయడం
+              Navigator.pushReplacementNamed(context, '/dashboard');
+            },
             backgroundColor: AppColors.secondary,
           ),
           const SizedBox(height: 20),
