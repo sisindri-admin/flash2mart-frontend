@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
-import '../widgets/custom_textfield.dart';
-import '../widgets/custom_button.dart';
+import '../services/api_service.dart';
 
 class MerchantAuthScreen extends StatefulWidget {
   const MerchantAuthScreen({super.key});
@@ -13,15 +12,26 @@ class MerchantAuthScreen extends StatefulWidget {
 class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     with SingleTickerProviderStateMixin {
   late TabController _tabController;
-  String selectedCategory = 'Grocery / Supermarket';
+  bool isLoading = false;
 
+  // Login Controllers
+  final TextEditingController _loginPhoneController = TextEditingController();
+  final TextEditingController _loginPasswordController = TextEditingController();
+
+  // Register Controllers
+  final TextEditingController _storeNameController = TextEditingController();
+  final TextEditingController _ownerNameController = TextEditingController();
+  final TextEditingController _regPhoneController = TextEditingController();
+  final TextEditingController _locationController = TextEditingController();
+  final TextEditingController _regPasswordController = TextEditingController();
+
+  String selectedCategory = 'Grocery / Supermarket';
   final List<String> categories = [
     'Grocery / Supermarket',
     'Food / Restaurant',
     'Pharmacy / Medical',
     'Electronics Store',
     'AC / Home Services',
-    'Delivery Partner',
   ];
 
   @override
@@ -33,7 +43,76 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   @override
   void dispose() {
     _tabController.dispose();
+    _loginPhoneController.dispose();
+    _loginPasswordController.dispose();
+    _storeNameController.dispose();
+    _ownerNameController.dispose();
+    _regPhoneController.dispose();
+    _locationController.dispose();
+    _regPasswordController.dispose();
     super.dispose();
+  }
+
+  // Handle Merchant Login
+  Future<void> _handleLogin() async {
+    final phone = _loginPhoneController.text.trim();
+    final password = _loginPasswordController.text.trim();
+
+    if (phone.isEmpty || password.isEmpty) {
+      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
+      return;
+    }
+
+    setState(() => isLoading = true);
+    final response = await ApiService.merchantLogin(phone, password);
+    setState(() => isLoading = false);
+
+    if (response['success'] == true) {
+      if (mounted) {
+        _showMessage('లాగిన్ సక్సెస్ అయింది!');
+        Navigator.pushReplacementNamed(context, '/dashboard');
+      }
+    } else {
+      _showMessage(response['message'] ?? 'లాగిన్ ఫెయిల్ అయింది');
+    }
+  }
+
+  // Handle Merchant Registration
+  Future<void> _handleRegister() async {
+    final storeName = _storeNameController.text.trim();
+    final ownerName = _ownerNameController.text.trim();
+    final phone = _regPhoneController.text.trim();
+    final location = _locationController.text.trim();
+    final password = _regPasswordController.text.trim();
+
+    if (storeName.isEmpty || ownerName.isEmpty || phone.isEmpty || location.isEmpty || password.isEmpty) {
+      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
+      return;
+    }
+
+    setState(() => isLoading = true);
+    final response = await ApiService.merchantRegister(
+      storeName: storeName,
+      ownerName: ownerName,
+      phone: phone,
+      category: selectedCategory,
+      location: location,
+      password: password,
+    );
+    setState(() => isLoading = false);
+
+    if (response['success'] == true) {
+      if (mounted) {
+        _showMessage('రిజిస్ట్రేషన్ పూర్తయింది! ఇప్పుడు లాగిన్ చేయండి.');
+        _tabController.animateTo(0);
+      }
+    } else {
+      _showMessage(response['message'] ?? 'రిజిస్ట్రేషన్ ఫెయిల్ అయింది');
+    }
+  }
+
+  void _showMessage(String msg) {
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
   }
 
   @override
@@ -41,46 +120,48 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     return Scaffold(
       backgroundColor: AppColors.background,
       body: SafeArea(
-        child: Column(
-          children: [
-            const SizedBox(height: 20),
-            _buildHeaderLogo(),
-            const SizedBox(height: 20),
-            Container(
-              margin: const EdgeInsets.symmetric(horizontal: 24),
-              height: 45,
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(25),
-                border: Border.all(color: Colors.grey.shade300),
-              ),
-              child: TabBar(
-                controller: _tabController,
-                indicator: BoxDecoration(
-                  borderRadius: BorderRadius.circular(25),
-                  color: AppColors.primary,
-                ),
-                labelColor: Colors.white,
-                unselectedLabelColor: AppColors.textDark,
-                labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                tabs: const [
-                  Tab(text: 'Merchant Login'),
-                  Tab(text: 'Register Business'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 20),
-            Expanded(
-              child: TabBarView(
-                controller: _tabController,
+        child: isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : Column(
                 children: [
-                  _buildLoginTab(),
-                  _buildRegisterTab(),
+                  const SizedBox(height: 20),
+                  _buildHeaderLogo(),
+                  const SizedBox(height: 20),
+                  Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    height: 45,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(25),
+                      border: Border.all(color: Colors.grey.shade300),
+                    ),
+                    child: TabBar(
+                      controller: _tabController,
+                      indicator: BoxDecoration(
+                        borderRadius: BorderRadius.circular(25),
+                        color: AppColors.primary,
+                      ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: AppColors.textDark,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      tabs: const [
+                        Tab(text: 'Merchant Login'),
+                        Tab(text: 'Register Business'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildLoginTab(),
+                        _buildRegisterTab(),
+                      ],
+                    ),
+                  ),
                 ],
               ),
-            ),
-          ],
-        ),
       ),
     );
   }
@@ -116,11 +197,6 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             ),
           ],
         ),
-        const SizedBox(height: 6),
-        const Text(
-          'Manage your business & services easily',
-          style: TextStyle(color: AppColors.textGrey, fontSize: 12),
-        ),
       ],
     );
   }
@@ -130,26 +206,34 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
       padding: const EdgeInsets.all(24),
       child: Column(
         children: [
-          const CustomTextField(
-            label: 'Registered Mobile / Email',
-            hint: 'Enter mobile number or email',
-            icon: Icons.person_outline,
-            keyboardType: TextInputType.emailAddress,
+          TextField(
+            controller: _loginPhoneController,
+            keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Mobile Number',
+              prefixIcon: Icon(Icons.phone),
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 16),
-          const CustomTextField(
-            label: 'Password',
-            hint: 'Enter password',
-            icon: Icons.lock_outline,
-            isPassword: true,
-            suffixIcon: Icon(Icons.visibility_off, color: AppColors.textGrey),
+          TextField(
+            controller: _loginPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              prefixIcon: Icon(Icons.lock),
+              border: OutlineInputBorder(),
+            ),
           ),
-          const SizedBox(height: 20),
-          CustomButton(
-            text: 'LOGIN TO PARTNER PORTAL',
-            onPressed: () {
-              Navigator.pushReplacementNamed(context, '/dashboard');
-            },
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _handleLogin,
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
+              child: const Text('LOGIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           ),
         ],
       ),
@@ -160,33 +244,75 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const CustomTextField(
-            label: 'Business / Store Name',
-            hint: 'e.g., Prakash Supermarket',
-            icon: Icons.store_outlined,
+          TextField(
+            controller: _storeNameController,
+            decoration: const InputDecoration(
+              labelText: 'Business / Store Name',
+              prefixIcon: Icon(Icons.store),
+              border: OutlineInputBorder(),
+            ),
           ),
-          const SizedBox(height: 16),
-          const CustomTextField(
-            label: 'Owner Name',
-            hint: 'Enter owner full name',
-            icon: Icons.person_outline,
+          const SizedBox(height: 12),
+          TextField(
+            controller: _ownerNameController,
+            decoration: const InputDecoration(
+              labelText: 'Owner Name',
+              prefixIcon: Icon(Icons.person),
+              border: OutlineInputBorder(),
+            ),
           ),
-          const SizedBox(height: 16),
-          const CustomTextField(
-            label: 'Mobile Number',
-            hint: '10 digit mobile number',
-            icon: Icons.phone_android_outlined,
+          const SizedBox(height: 12),
+          TextField(
+            controller: _regPhoneController,
             keyboardType: TextInputType.phone,
+            decoration: const InputDecoration(
+              labelText: 'Mobile Number',
+              prefixIcon: Icon(Icons.phone),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          DropdownButtonFormField<String>(
+            value: selectedCategory,
+            items: categories
+                .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
+                .toList(),
+            onChanged: (val) => setState(() => selectedCategory = val!),
+            decoration: const InputDecoration(
+              labelText: 'Business Category',
+              prefixIcon: Icon(Icons.category),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _locationController,
+            decoration: const InputDecoration(
+              labelText: 'City / Location',
+              prefixIcon: Icon(Icons.location_on),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _regPasswordController,
+            obscureText: true,
+            decoration: const InputDecoration(
+              labelText: 'Password',
+              prefixIcon: Icon(Icons.lock),
+              border: OutlineInputBorder(),
+            ),
           ),
           const SizedBox(height: 24),
-          CustomButton(
-            text: 'REGISTER AS PARTNER',
-            onPressed: () {
-              Navigator.pushReplacementNamed(context, '/dashboard');
-            },
-            backgroundColor: AppColors.secondary,
+          SizedBox(
+            width: double.infinity,
+            height: 48,
+            child: ElevatedButton(
+              onPressed: _handleRegister,
+              style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
+              child: const Text('REGISTER BUSINESS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+            ),
           ),
         ],
       ),
