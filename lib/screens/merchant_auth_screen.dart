@@ -44,11 +44,8 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
         child: Column(
           children: [
             const SizedBox(height: 20),
-            // Header Logo Area
             _buildHeaderLogo(),
             const SizedBox(height: 20),
-
-            // Tab Switcher (Login / Register)
             Container(
               margin: const EdgeInsets.symmetric(horizontal: 24),
               height: 45,
@@ -72,10 +69,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
                 ],
               ),
             ),
-
             const SizedBox(height: 20),
-
-            // Tab Views
             Expanded(
               child: TabBarView(
                 controller: _tabController,
@@ -91,7 +85,6 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     );
   }
 
-  // Header Logo Coonent
   Widget _buildHeaderLogo() {
     return Column(
       children: [
@@ -132,7 +125,6 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     );
   }
 
-  // 1. Merchant Login Form
   Widget _buildLoginTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -152,21 +144,10 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             isPassword: true,
             suffixIcon: Icon(Icons.visibility_off, color: AppColors.textGrey),
           ),
-          Align(
-            alignment: Alignment.centerRight,
-            child: TextButton(
-              onPressed: () {},
-              child: const Text(
-                'Forgot Password?',
-                style: TextStyle(color: AppColors.primary, fontSize: 12),
-              ),
-            ),
-          ),
-          const SizedBox(height: 10),
+          const SizedBox(height: 20),
           CustomButton(
             text: 'LOGIN TO PARTNER PORTAL',
             onPressed: () {
-              // Dashboard కి నావిగేట్ చేయడం
               Navigator.pushReplacementNamed(context, '/dashboard');
             },
           ),
@@ -175,7 +156,6 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     );
   }
 
-  // 2. Merchant Register Form
   Widget _buildRegisterTab() {
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
@@ -200,74 +180,14 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             icon: Icons.phone_android_outlined,
             keyboardType: TextInputType.phone,
           ),
-          const SizedBox(height: 16),
-
-          // Business Category Dropdown
-          const Text(
-            'Business Category',
-            style: TextStyle(
-              fontSize: 13,
-              fontWeight: FontWeight.bold,
-              color: AppColors.textDark,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 12),
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(12),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.03),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                )
-              ],
-            ),
-            child: DropdownButtonHideUnderline(
-              child: DropdownButton<String>(
-                value: selectedCategory,
-                isExpanded: true,
-                icon: const Icon(Icons.keyboard_arrow_down, color: AppColors.primary),
-                items: categories.map((String item) {
-                  return DropdownMenuItem<String>(
-                    value: item,
-                    child: Text(item, style: const TextStyle(fontSize: 13)),
-                  );
-                }).toList(),
-                onChanged: (String? newValue) {
-                  setState(() {
-                    selectedCategory = newValue!;
-                  });
-                },
-              ),
-            ),
-          ),
-
-          const SizedBox(height: 16),
-          const CustomTextField(
-            label: 'City / Location',
-            hint: 'e.g., Visakhapatnam',
-            icon: Icons.location_on_outlined,
-          ),
-          const SizedBox(height: 16),
-          const CustomTextField(
-            label: 'Set Password',
-            hint: 'Create strong password',
-            icon: Icons.lock_outline,
-            isPassword: true,
-          ),
           const SizedBox(height: 24),
           CustomButton(
             text: 'REGISTER AS PARTNER',
             onPressed: () {
-              // Dashboard కి నావిగేట్ చేయడం
               Navigator.pushReplacementNamed(context, '/dashboard');
             },
             backgroundColor: AppColors.secondary,
           ),
-          const SizedBox(height: 20),
         ],
       ),
     );
