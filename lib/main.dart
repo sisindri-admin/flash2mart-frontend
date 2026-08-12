@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'constants/app_colors.dart';
 import 'screens/splash_screen.dart';
 import 'screens/merchant_auth_screen.dart';
-import 'screens/merchant_dashboard.dart';
+import 'screens/merchant_dashboard.dart'; // <-- ఈ ఇంపోర్ట్ సరిగ్గా ఉందో లేదో చూడండి
 
 void main() {
   runApp(const Flash2MartApp());
@@ -27,13 +27,10 @@ class Flash2MartApp extends StatelessWidget {
           secondary: AppColors.secondary,
         ),
       ),
-      // మొదట చూపించాల్సిన స్క్రీన్
       home: const SplashScreen(),
-      
-      // పేజీ నావిగేషన్ Routes
       routes: {
         '/auth': (context) => const MerchantAuthScreen(),
-        '/dashboard': (context) => MerchantDashboardScreen(),
+        '/dashboard': (context) => const MerchantDashboardScreen(),
       },
     );
   }
