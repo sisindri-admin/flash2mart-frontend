@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import 'constants/app_colors.dart';
 import 'screens/splash_screen.dart';
 import 'screens/merchant_auth_screen.dart';
-import 'screens/merchant_dashboard.dart'; // <-- ఈ ఇంపోర్ట్ సరిగ్గా ఉందో లేదో చూడండి
+import 'screens/merchant_dashboard.dart'; // <-- ఈ ఇంపోర్ట్ సరిగ్గా ఉందో లేదో చూడం
 
 void main() {
   runApp(const Flash2MartApp());
