@@ -91,7 +91,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     );
   }
 
-  // Header Logo Component
+  // Header Logo Coonent
   Widget _buildHeaderLogo() {
     return Column(
       children: [
