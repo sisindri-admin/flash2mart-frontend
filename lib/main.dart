@@ -29,7 +29,7 @@ class Flash2MartApp extends StatelessWidget {
       ),
       home: const SplashScreen(),
       routes: {
-        '/auth': (context) => const MerchantAuthScreen(),
+        '/auth': (context) => MerchantAuthScreen(),
         '/dashboard': (context) => MerchantDashboardScreen(), // const తీసివేయబడింది
       },
     );
