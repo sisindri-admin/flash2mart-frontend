@@ -27,10 +27,13 @@ class Flash2MartApp extends StatelessWidget {
           secondary: AppColors.secondary,
         ),
       ),
+      // మొదట చూపించాల్సిన స్క్రీన్
       home: const SplashScreen(),
+      
+      // పేజీ నావిగేషన్ Routes
       routes: {
         '/auth': (context) => MerchantAuthScreen(),
-        '/dashboard': (context) => MerchantDashboardScreen(), // const తీసివేయబడింది
+        '/dashboard': (context) => MerchantDashboardScreen(),
       },
     );
   }
