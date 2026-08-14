@@ -14,11 +14,11 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   late TabController _tabController;
   bool isLoading = false;
 
-  // Form Keys (ఫారమ్ వ్యాలిడేషన్ కోసం)
+  // Form Keys
   final _loginFormKey = GlobalKey<FormState>();
   final _registerFormKey = GlobalKey<FormState>();
 
-  // Password ను దాచడానికి / చూపించడానికి పారామితులు
+  // Password Visibility Controls
   bool _obscureLoginPassword = true;
   bool _obscureRegPassword = true;
 
@@ -178,15 +178,32 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     );
   }
 
-  // Header Logo UI
+  // Header Logo UI Section
   Widget _buildHeaderLogo() {
     return Column(
-      children: const [
-        Icon(Icons.storefront_rounded, size: 60, color: Colors.indigo),
-        SizedBox(height: 8),
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: const BoxDecoration(
+            color: Colors.indigo, // AppColors.darkBlue కి బదులుగా డిఫాల్ట్ Indigo కలర్ ఇవ్వబడింది
+            shape: BoxShape.circle,
+          ),
+          child: const Icon(Icons.storefront, color: Colors.white, size: 28),
+        ),
+        const SizedBox(height: 8),
+        RichText(
+          text: const TextSpan(
+            style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+            children: [
+              TextSpan(text: 'Flash', style: TextStyle(color: Colors.blue)),
+              TextSpan(text: '2', style: TextStyle(color: Colors.red)),
+              TextSpan(text: 'Mart ', style: TextStyle(color: Colors.black)),
+            ],
+          ),
+        ),
         Text(
           'మర్చంట్ పోర్టల్',
-          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+          style: TextStyle(color: AppColors.primary, fontSize: 16),
         ),
       ],
     );
@@ -235,17 +252,21 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
                   val == null || val.trim().isEmpty ? 'పాస్‌వర్డ్ ఎంటర్ చేయండి' : null,
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _handleLogin,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _handleLogin,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'LOGIN',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
-              child: const Text('లాగిన్ అవ్వండి',
-                  style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
           ],
         ),
@@ -272,7 +293,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
               validator: (val) =>
                   val == null || val.trim().isEmpty ? 'స్టోర్ పేరు ఎంటర్ చేయండి' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _ownerNameController,
               decoration: const InputDecoration(
@@ -283,7 +304,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
               validator: (val) =>
                   val == null || val.trim().isEmpty ? 'ఓనర్ పేరు ఎంటర్ చేయండి' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _regPhoneController,
               keyboardType: TextInputType.phone,
@@ -295,7 +316,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
               validator: (val) =>
                   val == null || val.trim().isEmpty ? 'ఫోన్ నెంబర్ ఎంటర్ చేయండి' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             DropdownButtonFormField<String>(
               value: selectedCategory,
               decoration: const InputDecoration(
@@ -312,7 +333,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
                 }
               },
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _locationController,
               decoration: const InputDecoration(
@@ -323,7 +344,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
               validator: (val) =>
                   val == null || val.trim().isEmpty ? 'లొకేషన్ ఎంటర్ చేయండి' : null,
             ),
-            const SizedBox(height: 16),
+            const SizedBox(height: 12),
             TextFormField(
               controller: _regPasswordController,
               obscureText: _obscureRegPassword,
@@ -346,198 +367,24 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
                   val == null || val.trim().isEmpty ? 'పాస్‌వర్డ్ ఎంటర్ చేయండి' : null,
             ),
             const SizedBox(height: 24),
-            ElevatedButton(
-              onPressed: _handleRegister,
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(8),
+            SizedBox(
+              height: 48,
+              child: ElevatedButton(
+                onPressed: _handleRegister,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppColors.primary,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                ),
+                child: const Text(
+                  'REGISTER BUSINESS',
+                  style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
                 ),
               ),
-              child: const Text('రిజిస్టర్ చేసుకోండి',
-                  style: TextStyle(fontSize: 16, color: Colors.white)),
             ),
           ],
         ),
-      ),
-    );
-  }
-}                      ),
-                      labelColor: Colors.white,
-                      unselectedLabelColor: AppColors.textDark,
-                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
-                      tabs: const [
-                        Tab(text: 'Merchant Login'),
-                        Tab(text: 'Register Business'),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Expanded(
-                    child: TabBarView(
-                      controller: _tabController,
-                      children: [
-                        _buildLoginTab(),
-                        _buildRegisterTab(),
-                      ],
-                    ),
-                  ),
-                ],
-              ),
-      ),
-    );
-  }
-
-  Widget _buildHeaderLogo() {
-    return Column(
-      children: [
-        Row(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: AppColors.darkBlue,
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: const Icon(Icons.storefront, color: Colors.white, size: 28),
-            ),
-            const SizedBox(width: 10),
-            RichText(
-              text: const TextSpan(
-                style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-                children: [
-                  TextSpan(text: 'Flash', style: TextStyle(color: Colors.blue)),
-                  TextSpan(text: '2', style: TextStyle(color: Colors.red)),
-                  TextSpan(text: 'Mart ', style: TextStyle(color: Colors.black)),
-                  TextSpan(
-                    text: 'Partner',
-                    style: TextStyle(color: AppColors.primary, fontSize: 16),
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildLoginTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          TextField(
-            controller: _loginPhoneController,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Mobile Number',
-              prefixIcon: Icon(Icons.phone),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 16),
-          TextField(
-            controller: _loginPasswordController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Password',
-              prefixIcon: Icon(Icons.lock),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _handleLogin,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text('LOGIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildRegisterTab() {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
-      child: Column(
-        children: [
-          TextField(
-            controller: _storeNameController,
-            decoration: const InputDecoration(
-              labelText: 'Business / Store Name',
-              prefixIcon: Icon(Icons.store),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _ownerNameController,
-            decoration: const InputDecoration(
-              labelText: 'Owner Name',
-              prefixIcon: Icon(Icons.person),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _regPhoneController,
-            keyboardType: TextInputType.phone,
-            decoration: const InputDecoration(
-              labelText: 'Mobile Number',
-              prefixIcon: Icon(Icons.phone),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          DropdownButtonFormField<String>(
-            value: selectedCategory,
-            items: categories
-                .map((cat) => DropdownMenuItem(value: cat, child: Text(cat)))
-                .toList(),
-            onChanged: (val) => setState(() => selectedCategory = val!),
-            decoration: const InputDecoration(
-              labelText: 'Business Category',
-              prefixIcon: Icon(Icons.category),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _locationController,
-            decoration: const InputDecoration(
-              labelText: 'City / Location',
-              prefixIcon: Icon(Icons.location_on),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 12),
-          TextField(
-            controller: _regPasswordController,
-            obscureText: true,
-            decoration: const InputDecoration(
-              labelText: 'Password',
-              prefixIcon: Icon(Icons.lock),
-              border: OutlineInputBorder(),
-            ),
-          ),
-          const SizedBox(height: 24),
-          SizedBox(
-            width: double.infinity,
-            height: 48,
-            child: ElevatedButton(
-              onPressed: _handleRegister,
-              style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
-              child: const Text('REGISTER BUSINESS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-            ),
-          ),
-        ],
       ),
     );
   }
