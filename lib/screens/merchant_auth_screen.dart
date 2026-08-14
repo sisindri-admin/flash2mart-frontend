@@ -14,6 +14,14 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   late TabController _tabController;
   bool isLoading = false;
 
+  // Form Keys (ఫారమ్ వ్యాలిడేషన్ కోసం)
+  final _loginFormKey = GlobalKey<FormState>();
+  final _registerFormKey = GlobalKey<FormState>();
+
+  // Password ను దాచడానికి / చూపించడానికి పారామితులు
+  bool _obscureLoginPassword = true;
+  bool _obscureRegPassword = true;
+
   // Login Controllers
   final TextEditingController _loginPhoneController = TextEditingController();
   final TextEditingController _loginPasswordController = TextEditingController();
@@ -55,59 +63,63 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
 
   // Handle Merchant Login
   Future<void> _handleLogin() async {
+    if (!_loginFormKey.currentState!.validate()) return;
+
     final phone = _loginPhoneController.text.trim();
     final password = _loginPasswordController.text.trim();
 
-    if (phone.isEmpty || password.isEmpty) {
-      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
-      return;
-    }
-
     setState(() => isLoading = true);
-    final response = await ApiService.merchantLogin(phone, password);
-    setState(() => isLoading = false);
+    try {
+      final response = await ApiService.merchantLogin(phone, password);
+      setState(() => isLoading = false);
 
-    if (response['success'] == true) {
-      if (mounted) {
-        _showMessage('లాగిన్ సక్సెస్ అయింది!');
-        Navigator.pushReplacementNamed(context, '/dashboard');
+      if (response['success'] == true) {
+        if (mounted) {
+          _showMessage('లాగిన్ సక్సెస్ అయింది!');
+          Navigator.pushReplacementNamed(context, '/dashboard');
+        }
+      } else {
+        _showMessage(response['message'] ?? 'లాగిన్ ఫెయిల్ అయింది');
       }
-    } else {
-      _showMessage(response['message'] ?? 'లాగిన్ ఫెయిల్ అయింది');
+    } catch (e) {
+      setState(() => isLoading = false);
+      _showMessage('ఎర్రర్ వచ్చింది: ${e.toString()}');
     }
   }
 
   // Handle Merchant Registration
   Future<void> _handleRegister() async {
+    if (!_registerFormKey.currentState!.validate()) return;
+
     final storeName = _storeNameController.text.trim();
     final ownerName = _ownerNameController.text.trim();
     final phone = _regPhoneController.text.trim();
     final location = _locationController.text.trim();
     final password = _regPasswordController.text.trim();
 
-    if (storeName.isEmpty || ownerName.isEmpty || phone.isEmpty || location.isEmpty || password.isEmpty) {
-      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
-      return;
-    }
-
     setState(() => isLoading = true);
-    final response = await ApiService.merchantRegister(
-      storeName: storeName,
-      ownerName: ownerName,
-      phone: phone,
-      category: selectedCategory,
-      location: location,
-      password: password,
-    );
-    setState(() => isLoading = false);
+    try {
+      final response = await ApiService.merchantRegister(
+        storeName: storeName,
+        ownerName: ownerName,
+        phone: phone,
+        category: selectedCategory,
+        location: location,
+        password: password,
+      );
+      setState(() => isLoading = false);
 
-    if (response['success'] == true) {
-      if (mounted) {
-        _showMessage('రిజిస్ట్రేషన్ పూర్తయింది! ఇప్పుడు లాగిన్ చేయండి.');
-        _tabController.animateTo(0);
+      if (response['success'] == true) {
+        if (mounted) {
+          _showMessage('రిజిస్ట్రేషన్ పూర్తయింది! ఇప్పుడు లాగిన్ చేయండి.');
+          _tabController.animateTo(0);
+        }
+      } else {
+        _showMessage(response['message'] ?? 'రిజిస్ట్రేషన్ ఫెయిల్ అయింది');
       }
-    } else {
-      _showMessage(response['message'] ?? 'రిజిస్ట్రేషన్ ఫెయిల్ అయింది');
+    } catch (e) {
+      setState(() => isLoading = false);
+      _showMessage('ఎర్రర్ వచ్చింది: ${e.toString()}');
     }
   }
 
@@ -141,6 +153,217 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
                         borderRadius: BorderRadius.circular(25),
                         color: AppColors.primary,
                       ),
+                      labelColor: Colors.white,
+                      unselectedLabelColor: Colors.grey.shade600,
+                      labelStyle: const TextStyle(fontWeight: FontWeight.bold),
+                      tabs: const [
+                        Tab(text: 'లాగిన్'),
+                        Tab(text: 'రిజిస్టర్'),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 15),
+                  Expanded(
+                    child: TabBarView(
+                      controller: _tabController,
+                      children: [
+                        _buildLoginForm(),
+                        _buildRegisterForm(),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  // Header Logo UI
+  Widget _buildHeaderLogo() {
+    return Column(
+      children: const [
+        Icon(Icons.storefront_rounded, size: 60, color: Colors.indigo),
+        SizedBox(height: 8),
+        Text(
+          'మర్చంట్ పోర్టల్',
+          style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+        ),
+      ],
+    );
+  }
+
+  // Login UI Form
+  Widget _buildLoginForm() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Form(
+        key: _loginFormKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _loginPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'ఫోన్ నెంబర్',
+                prefixIcon: Icon(Icons.phone),
+                border: OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'ఫోన్ నెంబర్ ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _loginPasswordController,
+              obscureText: _obscureLoginPassword,
+              decoration: InputDecoration(
+                labelText: 'పాస్‌వర్డ్',
+                prefixIcon: const Icon(Icons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureLoginPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility),
+                  onPressed: () {
+                    setState(() {
+                      _obscureLoginPassword = !_obscureLoginPassword;
+                    });
+                  },
+                ),
+                border: const OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'పాస్‌వర్డ్ ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _handleLogin,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('లాగిన్ అవ్వండి',
+                  style: TextStyle(fontSize: 16, color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // Register UI Form
+  Widget _buildRegisterForm() {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24.0),
+      child: Form(
+        key: _registerFormKey,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            TextFormField(
+              controller: _storeNameController,
+              decoration: const InputDecoration(
+                labelText: 'స్టోర్ పేరు',
+                prefixIcon: Icon(Icons.store),
+                border: OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'స్టోర్ పేరు ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _ownerNameController,
+              decoration: const InputDecoration(
+                labelText: 'ఓనర్ పేరు',
+                prefixIcon: Icon(Icons.person),
+                border: OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'ఓనర్ పేరు ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _regPhoneController,
+              keyboardType: TextInputType.phone,
+              decoration: const InputDecoration(
+                labelText: 'ఫోన్ నెంబర్',
+                prefixIcon: Icon(Icons.phone),
+                border: OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'ఫోన్ నెంబర్ ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 16),
+            DropdownButtonFormField<String>(
+              value: selectedCategory,
+              decoration: const InputDecoration(
+                labelText: 'కేటగిరీ',
+                prefixIcon: Icon(Icons.category),
+                border: OutlineInputBorder(),
+              ),
+              items: categories.map((cat) {
+                return DropdownMenuItem(value: cat, child: Text(cat));
+              }).toList(),
+              onChanged: (val) {
+                if (val != null) {
+                  setState(() => selectedCategory = val);
+                }
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _locationController,
+              decoration: const InputDecoration(
+                labelText: 'లొకేషన్ / అడ్రస్',
+                prefixIcon: Icon(Icons.location_on),
+                border: OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'లొకేషన్ ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _regPasswordController,
+              obscureText: _obscureRegPassword,
+              decoration: InputDecoration(
+                labelText: 'పాస్‌వర్డ్',
+                prefixIcon: const Icon(Icons.lock),
+                suffixIcon: IconButton(
+                  icon: Icon(_obscureRegPassword
+                      ? Icons.visibility_off
+                      : Icons.visibility),
+                  onPressed: () {
+                    setState(() {
+                      _obscureRegPassword = !_obscureRegPassword;
+                    });
+                  },
+                ),
+                border: const OutlineInputBorder(),
+              ),
+              validator: (val) =>
+                  val == null || val.trim().isEmpty ? 'పాస్‌వర్డ్ ఎంటర్ చేయండి' : null,
+            ),
+            const SizedBox(height: 24),
+            ElevatedButton(
+              onPressed: _handleRegister,
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppColors.primary,
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(8),
+                ),
+              ),
+              child: const Text('రిజిస్టర్ చేసుకోండి',
+                  style: TextStyle(fontSize: 16, color: Colors.white)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}                      ),
                       labelColor: Colors.white,
                       unselectedLabelColor: AppColors.textDark,
                       labelStyle: const TextStyle(fontWeight: FontWeight.bold),
