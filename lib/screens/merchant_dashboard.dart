@@ -1,14 +1,14 @@
 import 'package:flutter/material.dart';
 import '../constants/app_colors.dart';
 
-class MerchantDashboardScreen extends StatefulWidget {
-  const MerchantDashboardScreen({super.key});
+class MerchantDashboard extends StatefulWidget {
+  const MerchantDashboard({super.key});
 
   @override
-  State<MerchantDashboardScreen> createState() => _MerchantDashboardScreenState();
+  State<MerchantDashboard> createState() => _MerchantDashboardState();
 }
 
-class _MerchantDashboardScreenState extends State<MerchantDashboardScreen> {
+class _MerchantDashboardState extends State<MerchantDashboard> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
