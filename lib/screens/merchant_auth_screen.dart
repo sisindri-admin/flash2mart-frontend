@@ -1,6 +1,8 @@
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+
 import '../constants/app_colors.dart';
-import '../services/api_service.dart';
 
 class MerchantAuthScreen extends StatefulWidget {
   const MerchantAuthScreen({super.key});
@@ -11,19 +13,23 @@ class MerchantAuthScreen extends StatefulWidget {
 
 class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     with SingleTickerProviderStateMixin {
-  late TabController _tabController;
+  late final TabController _tabController;
   bool isLoading = false;
 
   // Login Controllers
-  final TextEditingController _loginPhoneController = TextEditingController();
+  final TextEditingController _loginEmailController = TextEditingController();
   final TextEditingController _loginPasswordController = TextEditingController();
 
   // Register Controllers
   final TextEditingController _storeNameController = TextEditingController();
   final TextEditingController _ownerNameController = TextEditingController();
+  final TextEditingController _regEmailController = TextEditingController();
   final TextEditingController _regPhoneController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _regPasswordController = TextEditingController();
+
+  final FirebaseAuth _auth = FirebaseAuth.instance;
+  final FirebaseFirestore _firestore = FirebaseFirestore.instance;
 
   String selectedCategory = 'Grocery / Supermarket';
   final List<String> categories = [
@@ -43,76 +49,121 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   @override
   void dispose() {
     _tabController.dispose();
-    _loginPhoneController.dispose();
+    _loginEmailController.dispose();
     _loginPasswordController.dispose();
     _storeNameController.dispose();
     _ownerNameController.dispose();
+    _regEmailController.dispose();
     _regPhoneController.dispose();
     _locationController.dispose();
     _regPasswordController.dispose();
     super.dispose();
   }
 
-  // Handle Merchant Login
   Future<void> _handleLogin() async {
-    final phone = _loginPhoneController.text.trim();
+    final email = _loginEmailController.text.trim();
     final password = _loginPasswordController.text.trim();
 
-    if (phone.isEmpty || password.isEmpty) {
-      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
+    if (email.isEmpty || password.isEmpty) {
+      _showMessage('Please enter email and password.');
       return;
     }
 
     setState(() => isLoading = true);
-    final response = await ApiService.merchantLogin(phone, password);
-    setState(() => isLoading = false);
 
-    if (response['success'] == true) {
-      if (mounted) {
-        _showMessage('లాగిన్ సక్సెస్ అయింది!');
-        Navigator.pushReplacementNamed(context, '/dashboard');
-      }
-    } else {
-      _showMessage(response['message'] ?? 'లాగిన్ ఫెయిల్ అయింది');
+    try {
+      await _auth.signInWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      if (!mounted) return;
+
+      _showMessage('Login successful!');
+      Navigator.pushReplacementNamed(context, '/dashboard');
+    } on FirebaseAuthException catch (e) {
+      _showMessage(_authMessage(e.code));
+    } catch (e) {
+      _showMessage('Login failed: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
     }
   }
 
-  // Handle Merchant Registration
   Future<void> _handleRegister() async {
     final storeName = _storeNameController.text.trim();
     final ownerName = _ownerNameController.text.trim();
+    final email = _regEmailController.text.trim();
     final phone = _regPhoneController.text.trim();
     final location = _locationController.text.trim();
     final password = _regPasswordController.text.trim();
 
-    if (storeName.isEmpty || ownerName.isEmpty || phone.isEmpty || location.isEmpty || password.isEmpty) {
-      _showMessage('దయచేసి అన్ని వివరాలు ఎంటర్ చేయండి.');
+    if (storeName.isEmpty ||
+        ownerName.isEmpty ||
+        email.isEmpty ||
+        phone.isEmpty ||
+        location.isEmpty ||
+        password.isEmpty) {
+      _showMessage('Please fill all the fields.');
       return;
     }
 
     setState(() => isLoading = true);
-    final response = await ApiService.merchantRegister(
-      storeName: storeName,
-      ownerName: ownerName,
-      phone: phone,
-      category: selectedCategory,
-      location: location,
-      password: password,
-    );
-    setState(() => isLoading = false);
 
-    if (response['success'] == true) {
-      if (mounted) {
-        _showMessage('రిజిస్ట్రేషన్ పూర్తయింది! ఇప్పుడు లాగిన్ చేయండి.');
-        _tabController.animateTo(0);
-      }
-    } else {
-      _showMessage(response['message'] ?? 'రిజిస్ట్రేషన్ ఫెయిల్ అయింది');
+    try {
+      final userCredential = await _auth.createUserWithEmailAndPassword(
+        email: email,
+        password: password,
+      );
+
+      final uid = userCredential.user!.uid;
+
+      await _firestore.collection('merchants').doc(uid).set({
+        'uid': uid,
+        'storeName': storeName,
+        'ownerName': ownerName,
+        'email': email,
+        'phone': phone,
+        'category': selectedCategory,
+        'location': location,
+        'createdAt': FieldValue.serverTimestamp(),
+      });
+
+      if (!mounted) return;
+
+      _showMessage('Registration successful! Please login.');
+      _tabController.animateTo(0);
+    } on FirebaseAuthException catch (e) {
+      _showMessage(_authMessage(e.code));
+    } catch (e) {
+      _showMessage('Registration failed: $e');
+    } finally {
+      if (mounted) setState(() => isLoading = false);
+    }
+  }
+
+  String _authMessage(String code) {
+    switch (code) {
+      case 'user-not-found':
+        return 'No user found for this email.';
+      case 'wrong-password':
+        return 'Incorrect password.';
+      case 'email-already-in-use':
+        return 'This email already exists.';
+      case 'weak-password':
+        return 'Password is too weak.';
+      case 'invalid-email':
+        return 'Invalid email format.';
+      default:
+        return 'Authentication error: $code';
     }
   }
 
   void _showMessage(String msg) {
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(msg)),
+    );
   }
 
   @override
@@ -207,11 +258,11 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
       child: Column(
         children: [
           TextField(
-            controller: _loginPhoneController,
-            keyboardType: TextInputType.phone,
+            controller: _loginEmailController,
+            keyboardType: TextInputType.emailAddress,
             decoration: const InputDecoration(
-              labelText: 'Mobile Number',
-              prefixIcon: Icon(Icons.phone),
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.email),
               border: OutlineInputBorder(),
             ),
           ),
@@ -232,7 +283,13 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             child: ElevatedButton(
               onPressed: _handleLogin,
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.primary),
-              child: const Text('LOGIN', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'LOGIN',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],
@@ -259,6 +316,16 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             decoration: const InputDecoration(
               labelText: 'Owner Name',
               prefixIcon: Icon(Icons.person),
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 12),
+          TextField(
+            controller: _regEmailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.email),
               border: OutlineInputBorder(),
             ),
           ),
@@ -311,7 +378,13 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             child: ElevatedButton(
               onPressed: _handleRegister,
               style: ElevatedButton.styleFrom(backgroundColor: AppColors.secondary),
-              child: const Text('REGISTER BUSINESS', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+              child: const Text(
+                'REGISTER BUSINESS',
+                style: TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
             ),
           ),
         ],
