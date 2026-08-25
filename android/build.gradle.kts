@@ -4,7 +4,7 @@ allprojects {
         mavenCentral()
     }
 }
-"--android-skip-build-dependency-validation" 
+
 
 plugins {
     id("com.android.application")
