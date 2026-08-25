@@ -4,12 +4,14 @@ allprojects {
         mavenCentral()
     }
 }
+"--android-skip-build-dependency-validation" 
+
 plugins {
     id("com.android.application")
     id("kotlin-android")
     id("dev.flutter.flutter-gradle-plugin")
     id("com.google.gms.google-services") // (Firebase ఉంటే)
-    "--android-skip-build-dependency-validation" 
+    
 }
 
 val newBuildDir: Directory =
