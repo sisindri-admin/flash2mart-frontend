@@ -5,15 +5,6 @@ allprojects {
     }
 }
 
-
-plugins {
-    id("com.android.application")
-    id("kotlin-android")
-    id("dev.flutter.flutter-gradle-plugin")
-    id("com.google.gms.google-services") // (Firebase ఉంటే)
-    
-}
-
 val newBuildDir: Directory =
     rootProject.layout.buildDirectory
         .dir("../../build")
@@ -32,7 +23,3 @@ subprojects {
 tasks.register<Delete>("clean") {
     delete(rootProject.layout.buildDirectory)
 }
-org.gradle.jvmargs=-Xmx4G
-android.useAndroidX=true
-android.enableJetifier=true
-android.newDsl=false
