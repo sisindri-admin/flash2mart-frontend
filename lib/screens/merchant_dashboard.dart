@@ -1,7 +1,9 @@
 import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 
 import '../constants/app_colors.dart';
 import 'add_product_screen.dart';
@@ -15,18 +17,19 @@ class MerchantDashboard extends StatefulWidget {
 }
 
 class _MerchantDashboardState extends State<MerchantDashboard> {
+  bool _isSearchOpen = false;
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
 
-  // Inventory Dropdown & Dynamic Filters State
+  // Inventory Toggle & Filter
   bool _isInventoryExpanded = true;
   String _selectedCategory = 'All';
-  String _stockFilter = 'All'; // 'All', 'In Stock', 'Low Stock', 'Out of Stock'
-  String _sortBy = 'Default'; // 'Default', 'Price: Low to High', 'Price: High to Low', 'Name: A-Z'
 
-  // Primary Theme Colors (Matching Flash2Mart UI style)
+  // Theme Colors
   static const Color primaryBlue = Color(0xFF2563EB);
   static const Color primaryPurple = Color(0xFF4F46E5);
+  static const Color cardGreenBorder = Color(0xFF16A34A); // Outer Green Border
+  static const Color productNameGold = Color(0xFFFDE047); // Matching Warm Gold Accent
   static const Color bgGrey = Color(0xFFF8FAFC);
   static const Color textDark = Color(0xFF1E293B);
 
@@ -34,6 +37,117 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  // Delete Product with Confirmation Dialog
+  Future<void> _deleteProduct(String docId, String productName) async {
+    final bool? confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Text('Delete Product', style: TextStyle(fontWeight: FontWeight.bold)),
+        content: Text('Are you sure you want to delete "$productName"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: Colors.redAccent,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Delete', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirm == true) {
+      try {
+        await FirebaseFirestore.instance.collection('products').doc(docId).delete();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Product "$productName" deleted successfully.'),
+              backgroundColor: Colors.redAccent,
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+            ),
+          );
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to delete product: $e'),
+              backgroundColor: Colors.red,
+              behavior: SnackBarBehavior.floating,
+            ),
+          );
+        }
+      }
+    }
+  }
+
+  // Navigate to Edit Product
+  void _editProduct(String docId, Map<String, dynamic> data) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => AddProductScreen(
+          editDocId: docId,
+          editData: data,
+        ),
+      ),
+    );
+  }
+
+  // Pick Store Image from Gallery & Save to Firestore
+  Future<void> _pickAndUploadStoreImage(String merchantId) async {
+    try {
+      final XFile? file = await ImagePicker().pickImage(
+        source: ImageSource.gallery,
+        maxWidth: 800,
+        maxHeight: 600,
+        imageQuality: 70,
+      );
+
+      if (file == null) return;
+
+      final bytes = await file.readAsBytes();
+      final String base64String = base64Encode(bytes);
+
+      await FirebaseFirestore.instance
+          .collection('merchants')
+          .doc(merchantId)
+          .set({
+        'storeImageBase64': base64String,
+        'updatedAt': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: const Text('Store image updated successfully!'),
+            backgroundColor: Colors.teal,
+            behavior: SnackBarBehavior.floating,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+          ),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to update store image: $e'),
+            backgroundColor: Colors.redAccent,
+            behavior: SnackBarBehavior.floating,
+          ),
+        );
+      }
+    }
   }
 
   // Toggle Store Online/Offline status in Firestore
@@ -106,6 +220,8 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
             final storeName = merchantData?['storeName'] ?? 'Flash2Mart Store';
             final ownerName = merchantData?['ownerName'] ?? 'Prakash';
             final location = merchantData?['location'] ?? 'Nellore, Andhra Pradesh';
+            final storeImage = merchantData?['storeImageBase64'] ?? merchantData?['storeImage'] ?? '';
+            final category = merchantData?['category'] ?? 'Supermarket';
             final bool isOnline = merchantData?['isOnline'] ?? true;
 
             return StreamBuilder<QuerySnapshot>(
@@ -129,7 +245,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                     final int pendingOrders = _countPending(orders);
                     final double totalRevenue = _sumRevenue(orders);
 
-                    // 1. Dynamic Unique Categories Extraction from Products
+                    // Dynamic Categories
                     final Set<String> dynamicCategories = {'All'};
                     for (var doc in products) {
                       final data = doc.data() as Map<String, dynamic>;
@@ -139,132 +255,85 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                       }
                     }
 
-                    // 2. Filter products by search query, category, and Stock Conditions (Out of stock == 0, Low Stock < 100)
+                    // Product Filter Logic
                     var filteredProducts = products.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
                       final name = (data['name'] ?? '').toString().toLowerCase();
-                      final category = (data['category'] ?? '').toString();
-                      final stock = data['stock'] is int
-                          ? data['stock']
-                          : int.tryParse('${data['stock']}') ?? 0;
+                      final brand = (data['brand'] ?? '').toString().toLowerCase();
+                      final pCategory = (data['category'] ?? '').toString();
 
-                      // Search text filter
                       final matchesSearch = name.contains(_searchQuery.toLowerCase()) ||
-                          category.toLowerCase().contains(_searchQuery.toLowerCase());
+                          brand.contains(_searchQuery.toLowerCase()) ||
+                          pCategory.toLowerCase().contains(_searchQuery.toLowerCase());
                       if (!matchesSearch) return false;
 
-                      // Category filter
-                      if (_selectedCategory != 'All' && category != _selectedCategory) {
+                      if (_selectedCategory != 'All' && pCategory != _selectedCategory) {
                         return false;
                       }
-
-                      // Updated Stock Status Filter Conditions:
-                      // In Stock >= 100
-                      if (_stockFilter == 'In Stock' && stock < 100) return false;
-                      // Low Stock < 100 and > 0
-                      if (_stockFilter == 'Low Stock' && (stock <= 0 || stock >= 100)) return false;
-                      // Out of Stock == 0
-                      if (_stockFilter == 'Out of Stock' && stock > 0) return false;
 
                       return true;
                     }).toList();
 
-                    // 3. Sorting Filter
-                    if (_sortBy == 'Price: Low to High') {
-                      filteredProducts.sort((a, b) {
-                        final pA = (a.data() as Map<String, dynamic>)['price'] ?? 0;
-                        final pB = (b.data() as Map<String, dynamic>)['price'] ?? 0;
-                        return (pA as num).compareTo(pB as num);
-                      });
-                    } else if (_sortBy == 'Price: High to Low') {
-                      filteredProducts.sort((a, b) {
-                        final pA = (a.data() as Map<String, dynamic>)['price'] ?? 0;
-                        final pB = (b.data() as Map<String, dynamic>)['price'] ?? 0;
-                        return (pB as num).compareTo(pA as num);
-                      });
-                    } else if (_sortBy == 'Name: A-Z') {
-                      filteredProducts.sort((a, b) {
-                        final nA = ((a.data() as Map<String, dynamic>)['name'] ?? '').toString();
-                        final nB = ((b.data() as Map<String, dynamic>)['name'] ?? '').toString();
-                        return nA.compareTo(nB);
-                      });
-                    }
-
                     return SingleChildScrollView(
                       physics: const BouncingScrollPhysics(),
-                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. Top Header (Logo + Greeting + Status + Notification)
+                          // 1. TOP HEADER
                           _buildTopHeader(
-                            ownerName: ownerName,
+                            storeName: storeName,
                             location: location,
-                            pendingCount: pendingOrders,
+                            ownerName: ownerName,
+                            category: category,
                             isOnline: isOnline,
                             merchantId: merchantId,
+                            pendingCount: pendingOrders,
                           ),
-                          const SizedBox(height: 16),
+                          const SizedBox(height: 10),
 
-                          // 2. Main Search Bar
-                          _buildSearchBar(),
-                          const SizedBox(height: 16),
+                          // EXPANDABLE SEARCH BOX
+                          if (_isSearchOpen) ...[
+                            _buildToggledSearchBar(),
+                            const SizedBox(height: 10),
+                          ],
 
-                          // 3. Hero Promo Banner
-                          _buildHeroBanner(isOnline: isOnline, storeName: storeName),
-                          const SizedBox(height: 20),
+                          // 2. STORE IMAGE CARD
+                          Center(
+                            child: _buildAdjustedStoreImageCard(
+                              merchantId: merchantId,
+                              storeName: storeName,
+                              storeImage: storeImage,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
 
-                          // 4. Action Cards ("What are you looking for?")
-                          _buildSectionTitle('What are you looking for?'),
-                          const SizedBox(height: 12),
-                          _buildMainActionCards(
-                            context: context,
+                          // 3. ACTION BUTTONS
+                          _buildActionButtons(context, pendingOrders),
+                          const SizedBox(height: 14),
+
+                          // 4. CLEAN MINI INVENTORY CONTROL BAR
+                          _buildCleanInventoryControlBar(
                             totalProducts: totalProducts,
-                            pendingOrders: pendingOrders,
-                            totalRevenue: totalRevenue,
-                          ),
-                          const SizedBox(height: 22),
-
-                          // 5. Store Overview Metrics
-                          _buildMetricsHeader('Store Metrics'),
-                          const SizedBox(height: 12),
-                          _buildQuickMetricsRow(
-                            revenue: totalRevenue,
-                            pending: pendingOrders,
-                            totalOrders: totalOrders,
-                            products: totalProducts,
-                          ),
-                          const SizedBox(height: 22),
-
-                          // 6. DROPDOWN STORE INVENTORY & DYNAMIC FILTERS SECTION
-                          _buildInventoryDropdownCard(
-                            totalProducts: totalProducts,
-                            filteredCount: filteredProducts.length,
                             categories: dynamicCategories.toList(),
                           ),
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 10),
 
-                          // 7. Products List (Rendered when expanded)
+                          // 5. PRODUCT CARDS GRID (WITH EDIT & DELETE OPTIONS)
                           if (_isInventoryExpanded)
-                            _buildProductsList(filteredProducts)
+                            _buildProductsSquareGrid(filteredProducts)
                           else
-                            Container(
-                              width: double.infinity,
-                              padding: const EdgeInsets.all(16),
-                              decoration: BoxDecoration(
-                                color: Colors.white,
-                                borderRadius: BorderRadius.circular(16),
-                                border: Border.all(color: const Color(0xFFF1F5F9)),
-                              ),
-                              child: Center(
-                                child: Text(
-                                  'Tap "Store Inventory" above to expand $totalProducts products',
-                                  style: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                                ),
-                              ),
-                            ),
+                            const SizedBox.shrink(),
+                          const SizedBox(height: 18),
 
-                          const SizedBox(height: 80), // Space for floating button
+                          // 6. BOTTOM SUMMARY PANEL
+                          _buildBottomSummaryPanel(
+                            totalProducts: totalProducts,
+                            pendingOrders: pendingOrders,
+                            totalOrders: totalOrders,
+                            totalRevenue: totalRevenue,
+                          ),
+                          const SizedBox(height: 75), // Space for FAB
                         ],
                       ),
                     );
@@ -293,43 +362,41 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
 
   // --- 1. TOP HEADER ---
   Widget _buildTopHeader({
-    required String ownerName,
+    required String storeName,
     required String location,
-    required int pendingCount,
+    required String ownerName,
+    required String category,
     required bool isOnline,
     required String merchantId,
+    required int pendingCount,
   }) {
     return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        Container(
-          width: 44,
-          height: 44,
-          decoration: BoxDecoration(
-            color: const Color(0xFFEEF2FF),
-            borderRadius: BorderRadius.circular(14),
-          ),
-          child: const Icon(Icons.shopping_bag_rounded, color: primaryPurple, size: 24),
-        ),
-        const SizedBox(width: 10),
+        // Store Name & Location
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Row(
                 children: [
-                  const Text(
-                    'Flash2Mart',
-                    style: TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.w800,
-                      color: textDark,
-                      letterSpacing: -0.3,
+                  Flexible(
+                    child: Text(
+                      storeName,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w800,
+                        color: textDark,
+                        letterSpacing: -0.3,
+                      ),
                     ),
                   ),
                   const SizedBox(width: 6),
                   InkWell(
                     onTap: () => _toggleOnlineStatus(merchantId, isOnline),
-                    borderRadius: BorderRadius.circular(10),
+                    borderRadius: BorderRadius.circular(6),
                     child: Container(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                       decoration: BoxDecoration(
@@ -337,16 +404,17 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                         borderRadius: BorderRadius.circular(8),
                       ),
                       child: Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           CircleAvatar(
                             radius: 3,
                             backgroundColor: isOnline ? Colors.green : Colors.red,
                           ),
-                          const SizedBox(width: 4),
+                          const SizedBox(width: 3),
                           Text(
-                            isOnline ? 'Open' : 'Closed',
+                            isOnline ? 'OPEN' : 'CLOSED',
                             style: TextStyle(
-                              fontSize: 10,
+                              fontSize: 9,
                               fontWeight: FontWeight.bold,
                               color: isOnline ? const Color(0xFF166534) : const Color(0xFF991B1B),
                             ),
@@ -360,18 +428,18 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
               const SizedBox(height: 2),
               Row(
                 children: [
-                  Text(
-                    'Hello, $ownerName 👋',
-                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w600, color: Color(0xFF64748B)),
-                  ),
-                  const SizedBox(width: 4),
-                  const Icon(Icons.location_on, size: 12, color: primaryPurple),
+                  const Icon(Icons.location_on_rounded, size: 13, color: Colors.redAccent),
+                  const SizedBox(width: 2),
                   Flexible(
                     child: Text(
                       location,
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                      style: const TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w500,
+                        color: Color(0xFF64748B),
+                      ),
                     ),
                   ),
                 ],
@@ -379,656 +447,458 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
             ],
           ),
         ),
+
+        // Small Search Icon Button
+        IconButton(
+          tooltip: 'Search products',
+          icon: Icon(
+            _isSearchOpen ? Icons.search_off_rounded : Icons.search_rounded,
+            color: _isSearchOpen ? primaryBlue : const Color(0xFF475569),
+            size: 22,
+          ),
+          onPressed: () {
+            setState(() {
+              _isSearchOpen = !_isSearchOpen;
+              if (!_isSearchOpen) {
+                _searchController.clear();
+                _searchQuery = '';
+              }
+            });
+          },
+        ),
+
+        // Notifications Icon
         Stack(
           clipBehavior: Clip.none,
           children: [
-            Container(
-              decoration: BoxDecoration(
-                color: Colors.white,
-                shape: BoxShape.circle,
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 6),
-                ],
-              ),
-              child: IconButton(
-                icon: const Icon(Icons.notifications_none_rounded, color: textDark),
-                onPressed: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(builder: (_) => const OrdersScreen()),
-                  );
-                },
-              ),
+            IconButton(
+              icon: const Icon(Icons.notifications_none_rounded, color: textDark, size: 22),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(builder: (_) => const OrdersScreen()),
+                );
+              },
             ),
             if (pendingCount > 0)
               Positioned(
-                right: 4,
-                top: 4,
+                right: 6,
+                top: 6,
                 child: Container(
-                  padding: const EdgeInsets.all(4),
+                  padding: const EdgeInsets.all(3.5),
                   decoration: const BoxDecoration(
                     color: Colors.redAccent,
                     shape: BoxShape.circle,
                   ),
-                  constraints: const BoxConstraints(minWidth: 18, minHeight: 18),
+                  constraints: const BoxConstraints(minWidth: 16, minHeight: 16),
                   child: Text(
                     '$pendingCount',
                     textAlign: TextAlign.center,
-                    style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                    style: const TextStyle(color: Colors.white, fontSize: 8.5, fontWeight: FontWeight.bold),
                   ),
                 ),
               ),
           ],
         ),
-        const SizedBox(width: 4),
-        IconButton(
-          icon: const Icon(Icons.more_vert_rounded, color: Color(0xFF64748B)),
-          onPressed: () => _confirmLogout(context),
+
+        // Profile Avatar
+        GestureDetector(
+          onTap: () => _showProfileMenu(context, ownerName, storeName, location, category),
+          child: Container(
+            width: 36,
+            height: 36,
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF4F46E5), Color(0xFF2563EB)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              shape: BoxShape.circle,
+              boxShadow: [
+                BoxShadow(color: primaryBlue.withOpacity(0.2), blurRadius: 4),
+              ],
+            ),
+            child: Center(
+              child: Text(
+                ownerName.isNotEmpty ? ownerName[0].toUpperCase() : 'M',
+                style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15),
+              ),
+            ),
+          ),
         ),
       ],
     );
   }
 
-  // --- 2. SEARCH BAR ---
-  Widget _buildSearchBar() {
+  // --- TOGGLED SEARCH BAR ---
+  Widget _buildToggledSearchBar() {
     return Container(
+      height: 42,
       decoration: BoxDecoration(
         color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: const Color(0xFFE2E8F0)),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 2)),
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 4),
         ],
       ),
       child: TextField(
         controller: _searchController,
+        autofocus: true,
         onChanged: (val) => setState(() => _searchQuery = val),
-        style: const TextStyle(fontSize: 14),
+        style: const TextStyle(fontSize: 13),
         decoration: InputDecoration(
-          hintText: 'Search products, categories...',
-          hintStyle: const TextStyle(fontSize: 13.5, color: Color(0xFF94A3B8)),
-          prefixIcon: const Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 22),
+          hintText: 'Search products by name or brand...',
+          hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+          prefixIcon: const Icon(Icons.search_rounded, color: primaryBlue, size: 18),
           suffixIcon: _searchQuery.isNotEmpty
               ? IconButton(
-                  icon: const Icon(Icons.clear_rounded, size: 18, color: Colors.grey),
+                  icon: const Icon(Icons.clear_rounded, size: 16, color: Colors.grey),
                   onPressed: () {
                     _searchController.clear();
                     setState(() => _searchQuery = '');
                   },
                 )
-              : Container(
-                  margin: const EdgeInsets.all(6),
-                  decoration: const BoxDecoration(
-                    color: Color(0xFFEEF2FF),
-                    shape: BoxShape.circle,
-                  ),
-                  child: const Icon(Icons.tune_rounded, color: primaryPurple, size: 18),
-                ),
+              : null,
           border: InputBorder.none,
-          contentPadding: const EdgeInsets.symmetric(vertical: 14, horizontal: 16),
+          contentPadding: const EdgeInsets.symmetric(vertical: 11),
         ),
       ),
     );
   }
 
-  // --- 3. HERO BANNER ---
-  Widget _buildHeroBanner({required bool isOnline, required String storeName}) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.all(18),
-      decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          colors: [Color(0xFF3B41C5), Color(0xFF2563EB)],
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-        ),
-        borderRadius: BorderRadius.circular(20),
-        boxShadow: [
-          BoxShadow(
-            color: primaryBlue.withOpacity(0.25),
-            blurRadius: 16,
-            offset: const Offset(0, 6),
-          ),
-        ],
-      ),
-      child: Row(
-        children: [
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  storeName,
-                  style: const TextStyle(
-                    fontSize: 18,
-                    fontWeight: FontWeight.bold,
-                    color: Colors.white,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                const Text(
-                  'Manage store & live deliveries faster',
-                  style: TextStyle(fontSize: 12.5, color: Color(0xFFE0E7FF)),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 6,
-                  children: [
-                    _bannerPill('⚡ Fast'),
-                    _bannerPill('• Reliable'),
-                    _bannerPill('• Realtime'),
-                  ],
-                ),
-              ],
-            ),
-          ),
-          Container(
-            padding: const EdgeInsets.all(12),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.15),
-              borderRadius: BorderRadius.circular(16),
-            ),
-            child: const Icon(
-              Icons.electric_moped_rounded,
-              color: Colors.white,
-              size: 42,
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _bannerPill(String text) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-      decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.18),
-        borderRadius: BorderRadius.circular(20),
-      ),
-      child: Text(
-        text,
-        style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.w600),
-      ),
-    );
-  }
-
-  // --- 4. ACTION CARDS ---
-  Widget _buildMainActionCards({
-    required BuildContext context,
-    required int totalProducts,
-    required int pendingOrders,
-    required double totalRevenue,
+  // --- 2. STORE IMAGE CARD ---
+  Widget _buildAdjustedStoreImageCard({
+    required String merchantId,
+    required String storeName,
+    required String storeImage,
   }) {
-    return Column(
-      children: [
-        _actionCard(
-          title: 'Products & Stock',
-          subtitle: '$totalProducts items in store inventory',
-          icon: Icons.inventory_2_rounded,
-          iconBgColor: const Color(0xFF8B5CF6),
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const AddProductScreen()),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        _actionCard(
-          title: 'Live Orders',
-          subtitle: pendingOrders > 0 ? '$pendingOrders orders need action' : 'View & manage customer orders',
-          icon: Icons.receipt_long_rounded,
-          iconBgColor: const Color(0xFF06B6D4),
-          badge: pendingOrders > 0 ? '$pendingOrders New' : null,
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const OrdersScreen()),
-            );
-          },
-        ),
-        const SizedBox(height: 10),
-        _actionCard(
-          title: 'Store Revenue',
-          subtitle: '₹${totalRevenue.toStringAsFixed(0)} total earnings recorded',
-          icon: Icons.account_balance_wallet_rounded,
-          iconBgColor: const Color(0xFF3B82F6),
-          onTap: () {},
-        ),
-      ],
-    );
-  }
+    const double cardWidth = 260;
+    const double cardHeight = 145;
 
-  Widget _actionCard({
-    required String title,
-    required String subtitle,
-    required IconData icon,
-    required Color iconBgColor,
-    required VoidCallback onTap,
-    String? badge,
-  }) {
-    return InkWell(
-      onTap: onTap,
-      borderRadius: BorderRadius.circular(18),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+    if (storeImage.isNotEmpty) {
+      Widget img;
+      if (storeImage.startsWith('http')) {
+        img = Image.network(
+          storeImage,
+          width: cardWidth,
+          height: cardHeight,
+          fit: BoxFit.cover,
+          errorBuilder: (_, __, ___) => _buildEmptyTallCard(merchantId, cardWidth, cardHeight),
+        );
+      } else {
+        try {
+          img = Image.memory(
+            base64Decode(storeImage),
+            width: cardWidth,
+            height: cardHeight,
+            fit: BoxFit.cover,
+            errorBuilder: (_, __, ___) => _buildEmptyTallCard(merchantId, cardWidth, cardHeight),
+          );
+        } catch (_) {
+          img = _buildEmptyTallCard(merchantId, cardWidth, cardHeight);
+        }
+      }
+
+      return Container(
+        width: cardWidth,
+        height: cardHeight,
         decoration: BoxDecoration(
           color: Colors.white,
           borderRadius: BorderRadius.circular(18),
-          border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
           boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.02),
-              blurRadius: 8,
-              offset: const Offset(0, 2),
-            ),
+            BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 3)),
           ],
         ),
-        child: Row(
-          children: [
-            Container(
-              width: 50,
-              height: 50,
-              decoration: BoxDecoration(
-                color: iconBgColor.withOpacity(0.12),
-                borderRadius: BorderRadius.circular(14),
-              ),
-              child: Icon(icon, color: iconBgColor, size: 26),
-            ),
-            const SizedBox(width: 14),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Text(
-                        title,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 15.5,
-                          color: textDark,
-                        ),
-                      ),
-                      if (badge != null) ...[
-                        const SizedBox(width: 8),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                          decoration: BoxDecoration(
-                            color: Colors.deepOrange,
-                            borderRadius: BorderRadius.circular(6),
-                          ),
-                          child: Text(
-                            badge,
-                            style: const TextStyle(color: Colors.white, fontSize: 9.5, fontWeight: FontWeight.bold),
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                  const SizedBox(height: 2),
-                  Text(
-                    subtitle,
-                    style: const TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                  ),
-                ],
-              ),
-            ),
-            Container(
-              width: 32,
-              height: 32,
-              decoration: BoxDecoration(
-                color: const Color(0xFFF8FAFC),
-                shape: BoxShape.circle,
-                border: Border.all(color: const Color(0xFFE2E8F0)),
-              ),
-              child: const Icon(Icons.arrow_forward_rounded, size: 16, color: Color(0xFF64748B)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- 5. METRICS ROW ---
-  Widget _buildQuickMetricsRow({
-    required double revenue,
-    required int pending,
-    required int totalOrders,
-    required int products,
-  }) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        _metricSquircle(
-          label: 'Revenue',
-          value: '₹${revenue.toStringAsFixed(0)}',
-          icon: Icons.currency_rupee_rounded,
-          color: Colors.teal,
-        ),
-        _metricSquircle(
-          label: 'Pending',
-          value: '$pending',
-          icon: Icons.pending_actions_rounded,
-          color: Colors.deepOrange,
-        ),
-        _metricSquircle(
-          label: 'Orders',
-          value: '$totalOrders',
-          icon: Icons.shopping_cart_outlined,
-          color: primaryBlue,
-        ),
-        _metricSquircle(
-          label: 'Items',
-          value: '$products',
-          icon: Icons.category_outlined,
-          color: Colors.purple,
-        ),
-      ],
-    );
-  }
-
-  Widget _metricSquircle({
-    required String label,
-    required String value,
-    required IconData icon,
-    required Color color,
-  }) {
-    return Expanded(
-      child: Container(
-        margin: const EdgeInsets.symmetric(horizontal: 4),
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-          boxShadow: [
-            BoxShadow(color: Colors.black.withOpacity(0.015), blurRadius: 4),
-          ],
-        ),
-        child: Column(
-          children: [
-            Container(
-              padding: const EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: color.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Icon(icon, color: color, size: 20),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              value,
-              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
-            ),
-            Text(
-              label,
-              style: const TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  // --- 6. DROPDOWN STORE INVENTORY CARD & DYNAMIC FILTERS ---
-  Widget _buildInventoryDropdownCard({
-    required int totalProducts,
-    required int filteredCount,
-    required List<String> categories,
-  }) {
-    return Container(
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.02),
-            blurRadius: 8,
-            offset: const Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Dropdown Clickable Header
-          InkWell(
-            onTap: () => setState(() => _isInventoryExpanded = !_isInventoryExpanded),
-            borderRadius: BorderRadius.circular(18),
-            child: Padding(
-              padding: const EdgeInsets.all(14),
-              child: Row(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.all(8),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(18),
+          child: Stack(
+            children: [
+              img,
+              Positioned(
+                top: 8,
+                right: 8,
+                child: GestureDetector(
+                  onTap: () => _pickAndUploadStoreImage(merchantId),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
                     decoration: BoxDecoration(
-                      color: primaryBlue.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      color: Colors.black.withOpacity(0.65),
+                      borderRadius: BorderRadius.circular(14),
                     ),
-                    child: const Icon(Icons.inventory_2_rounded, color: primaryBlue, size: 20),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
+                    child: const Row(
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        const Text(
-                          'Store Inventory',
-                          style: TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
-                            color: textDark,
-                          ),
-                        ),
+                        Icon(Icons.camera_alt_rounded, color: Colors.white, size: 12),
+                        SizedBox(width: 3),
                         Text(
-                          'Showing $filteredCount of $totalProducts Total Products',
-                          style: const TextStyle(fontSize: 11.5, color: Color(0xFF64748B)),
+                          'Change',
+                          style: TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: primaryBlue,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Text(
-                      '$totalProducts Items',
-                      style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Icon(
-                    _isInventoryExpanded
-                        ? Icons.keyboard_arrow_up_rounded
-                        : Icons.keyboard_arrow_down_rounded,
-                    color: const Color(0xFF64748B),
-                    size: 26,
-                  ),
-                ],
+                ),
               ),
-            ),
+            ],
           ),
-
-          // Collapsible Filters Bar (Dynamic Categories & Status Filter)
-          if (_isInventoryExpanded) ...[
-            const Divider(height: 1, color: Color(0xFFF1F5F9)),
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // Category Header & Horizontal Scrollable Category Chips
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                    children: [
-                      const Text(
-                        'Filter by Category:',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                      ),
-                      // Sort Dropdown
-                      PopupMenuButton<String>(
-                        initialValue: _sortBy,
-                        onSelected: (val) => setState(() => _sortBy = val),
-                        child: Row(
-                          children: [
-                            const Icon(Icons.sort_rounded, size: 14, color: primaryBlue),
-                            const SizedBox(width: 3),
-                            Text(
-                              _sortBy,
-                              style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: primaryBlue),
-                            ),
-                            const Icon(Icons.arrow_drop_down, size: 16, color: primaryBlue),
-                          ],
-                        ),
-                        itemBuilder: (ctx) => [
-                          'Default',
-                          'Price: Low to High',
-                          'Price: High to Low',
-                          'Name: A-Z',
-                        ].map((s) => PopupMenuItem(value: s, child: Text(s, style: const TextStyle(fontSize: 13)))).toList(),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 6),
-                  SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    physics: const BouncingScrollPhysics(),
-                    child: Row(
-                      children: categories.map((cat) {
-                        final isSelected = _selectedCategory == cat;
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: ChoiceChip(
-                            label: Text(cat),
-                            selected: isSelected,
-                            onSelected: (val) => setState(() => _selectedCategory = cat),
-                            selectedColor: primaryBlue,
-                            backgroundColor: const Color(0xFFF1F5F9),
-                            labelStyle: TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: isSelected ? Colors.white : const Color(0xFF475569),
-                            ),
-                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-                            side: BorderSide(
-                              color: isSelected ? primaryBlue : Colors.transparent,
-                            ),
-                          ),
-                        );
-                      }).toList(),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-
-                  // Stock Availability Filters (Out of stock == 0, Low stock < 100, In stock >= 100)
-                  Row(
-                    children: [
-                      const Text(
-                        'Stock:',
-                        style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
-                      ),
-                      const SizedBox(width: 8),
-                      ...['All', 'In Stock', 'Low Stock', 'Out of Stock'].map((status) {
-                        final isSelected = _stockFilter == status;
-                        Color statusColor = primaryPurple;
-                        if (status == 'In Stock') statusColor = Colors.green;
-                        if (status == 'Low Stock') statusColor = Colors.orange;
-                        if (status == 'Out of Stock') statusColor = Colors.redAccent;
-
-                        return Padding(
-                          padding: const EdgeInsets.only(right: 6),
-                          child: InkWell(
-                            onTap: () => setState(() => _stockFilter = status),
-                            borderRadius: BorderRadius.circular(8),
-                            child: Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-                              decoration: BoxDecoration(
-                                color: isSelected ? statusColor.withOpacity(0.15) : const Color(0xFFF8FAFC),
-                                borderRadius: BorderRadius.circular(8),
-                                border: Border.all(
-                                  color: isSelected ? statusColor : const Color(0xFFE2E8F0),
-                                  width: 1,
-                                ),
-                              ),
-                              child: Text(
-                                status,
-                                style: TextStyle(
-                                  fontSize: 10.5,
-                                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
-                                  color: isSelected ? statusColor : const Color(0xFF64748B),
-                                ),
-                              ),
-                            ),
-                          ),
-                        );
-                      }),
-                    ],
-                  ),
-                ],
-              ),
-            ),
-          ],
-        ],
-      ),
-    );
-  }
-
-  // --- 7. PRODUCTS LIST ---
-  Widget _buildProductsList(List<QueryDocumentSnapshot> products) {
-    if (products.isEmpty) {
-      return Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(28),
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(16),
-          border: Border.all(color: const Color(0xFFF1F5F9)),
-        ),
-        child: Column(
-          children: [
-            Icon(Icons.inventory_2_outlined, size: 44, color: Colors.grey.shade300),
-            const SizedBox(height: 8),
-            const Text(
-              'No products match the selected filters',
-              style: TextStyle(color: Color(0xFF64748B), fontWeight: FontWeight.w500),
-            ),
-            const SizedBox(height: 6),
-            TextButton(
-              onPressed: () {
-                setState(() {
-                  _searchController.clear();
-                  _searchQuery = '';
-                  _selectedCategory = 'All';
-                  _stockFilter = 'All';
-                  _sortBy = 'Default';
-                });
-              },
-              child: const Text('Reset All Filters', style: TextStyle(color: primaryBlue, fontWeight: FontWeight.bold)),
-            ),
-          ],
         ),
       );
     }
 
-    return ListView.builder(
+    return _buildEmptyTallCard(merchantId, cardWidth, cardHeight);
+  }
+
+  Widget _buildEmptyTallCard(String merchantId, double width, double height) {
+    return GestureDetector(
+      onTap: () => _pickAndUploadStoreImage(merchantId),
+      child: Container(
+        width: width,
+        height: height,
+        decoration: BoxDecoration(
+          color: const Color(0xFFF8FAFC),
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(
+            color: const Color(0xFFCBD5E1),
+            width: 1.2,
+          ),
+          boxShadow: [
+            BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6),
+          ],
+        ),
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Container(
+              padding: const EdgeInsets.all(10),
+              decoration: BoxDecoration(
+                color: primaryBlue.withOpacity(0.1),
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(Icons.camera_alt_rounded, color: primaryBlue, size: 24),
+            ),
+            const SizedBox(height: 8),
+            const Text(
+              '+ Add store image',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                fontSize: 13,
+                color: primaryBlue,
+              ),
+            ),
+            const SizedBox(height: 2),
+            const Text(
+              'Tap to select from gallery',
+              style: TextStyle(fontSize: 10.5, color: Color(0xFF94A3B8)),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // --- 3. ACTION BUTTONS ---
+  Widget _buildActionButtons(BuildContext context, int pendingOrders) {
+    return Row(
+      children: [
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const AddProductScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: primaryBlue,
+                borderRadius: BorderRadius.circular(12),
+                boxShadow: [
+                  BoxShadow(color: primaryBlue.withOpacity(0.18), blurRadius: 4),
+                ],
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_circle_outline_rounded, color: Colors.white, size: 16),
+                  SizedBox(width: 6),
+                  Text('Add Product', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                ],
+              ),
+            ),
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: InkWell(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const OrdersScreen()),
+              );
+            },
+            borderRadius: BorderRadius.circular(12),
+            child: Container(
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: const Color(0xFFE2E8F0)),
+              ),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Icon(Icons.receipt_long_rounded, color: primaryPurple, size: 16),
+                  const SizedBox(width: 6),
+                  const Text('Orders', style: TextStyle(color: textDark, fontWeight: FontWeight.bold, fontSize: 13)),
+                  if (pendingOrders > 0) ...[
+                    const SizedBox(width: 6),
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                      decoration: BoxDecoration(color: Colors.deepOrange, borderRadius: BorderRadius.circular(6)),
+                      child: Text('$pendingOrders', style: const TextStyle(color: Colors.white, fontSize: 9, fontWeight: FontWeight.bold)),
+                    ),
+                  ],
+                ],
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  // --- 4. CLEAN MINI INVENTORY CONTROL BAR ---
+  Widget _buildCleanInventoryControlBar({
+    required int totalProducts,
+    required List<String> categories,
+  }) {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      physics: const BouncingScrollPhysics(),
+      child: Row(
+        children: [
+          // Store Inventory Toggle Button
+          InkWell(
+            onTap: () => setState(() => _isInventoryExpanded = !_isInventoryExpanded),
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: _isInventoryExpanded ? primaryBlue : Colors.white,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(
+                  color: _isInventoryExpanded ? primaryBlue : const Color(0xFFE2E8F0),
+                ),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(
+                    Icons.inventory_2_rounded,
+                    size: 14,
+                    color: _isInventoryExpanded ? Colors.white : primaryBlue,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Store Inventory ($totalProducts)',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.bold,
+                      color: _isInventoryExpanded ? Colors.white : textDark,
+                    ),
+                  ),
+                  const SizedBox(width: 3),
+                  Icon(
+                    _isInventoryExpanded ? Icons.keyboard_arrow_up_rounded : Icons.keyboard_arrow_down_rounded,
+                    size: 16,
+                    color: _isInventoryExpanded ? Colors.white : Colors.grey,
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+
+          // Small Category Chips
+          ...categories.map((cat) {
+            final isSelected = _selectedCategory == cat;
+            return Padding(
+              padding: const EdgeInsets.only(right: 6),
+              child: InkWell(
+                onTap: () => setState(() => _selectedCategory = cat),
+                borderRadius: BorderRadius.circular(8),
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                  decoration: BoxDecoration(
+                    color: isSelected ? const Color(0xFFEEF2FF) : Colors.white,
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: isSelected ? primaryPurple : const Color(0xFFE2E8F0),
+                    ),
+                  ),
+                  child: Text(
+                    cat,
+                    style: TextStyle(
+                      fontSize: 11,
+                      fontWeight: isSelected ? FontWeight.bold : FontWeight.w500,
+                      color: isSelected ? primaryPurple : const Color(0xFF475569),
+                    ),
+                  ),
+                ),
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  // --- 5. PRODUCTS GRID ---
+  Widget _buildProductsSquareGrid(List<QueryDocumentSnapshot> products) {
+    if (products.isEmpty) {
+      return Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(20),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(color: cardGreenBorder.withOpacity(0.3)),
+        ),
+        child: Center(
+          child: Text(
+            _searchQuery.isNotEmpty ? 'No products matching "$_searchQuery"' : 'No products in inventory',
+            style: const TextStyle(color: Color(0xFF64748B), fontSize: 12),
+          ),
+        ),
+      );
+    }
+
+    return GridView.builder(
       shrinkWrap: true,
       physics: const NeverScrollableScrollPhysics(),
       itemCount: products.length,
+      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: 2,
+        crossAxisSpacing: 10,
+        mainAxisSpacing: 10,
+        childAspectRatio: 0.88,
+      ),
       itemBuilder: (context, index) {
         final doc = products[index];
         final data = doc.data() as Map<String, dynamic>;
 
-        return _productCard(
+        return _highVisibilityProductCard(
           docId: doc.id,
+          rawDoc: doc,
           name: data['name'] ?? 'Product',
+          brand: data['brand'] ?? '',
           price: data['price'] ?? 0,
           unit: data['unit'] ?? '',
           stock: data['stock'] ?? 0,
+          variants: data['variants'] ?? [],
           category: data['category'] ?? '',
           imageBase64: data['imageBase64'] ?? '',
           imageUrl: data['imageUrl'] ?? '',
@@ -1037,19 +907,21 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  Widget _productCard({
+  // --- PRODUCT CARD WITH EDIT & DELETE BUTTONS ---
+  Widget _highVisibilityProductCard({
     required String docId,
+    required QueryDocumentSnapshot rawDoc,
     required String name,
+    required String brand,
     required dynamic price,
     required String unit,
     required dynamic stock,
+    required List<dynamic> variants,
     required String category,
     required String imageBase64,
     required String imageUrl,
   }) {
     final int stockQty = stock is int ? stock : int.tryParse('$stock') ?? 0;
-    
-    // Updated Stock Conditions
     final bool isOutOfStock = stockQty <= 0;
     final bool isLowStock = stockQty > 0 && stockQty < 100;
 
@@ -1058,165 +930,414 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
       try {
         imageWidget = Image.memory(
           base64Decode(imageBase64),
-          width: 68,
-          height: 68,
+          width: double.infinity,
+          height: double.infinity,
           fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+          errorBuilder: (_, __, ___) => Container(
+            color: const Color(0xFFE2E8F0),
+            child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
+          ),
         );
       } catch (_) {
-        imageWidget = const Icon(Icons.broken_image, size: 32, color: Colors.grey);
+        imageWidget = Container(
+          color: const Color(0xFFE2E8F0),
+          child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
+        );
       }
     } else if (imageUrl.isNotEmpty) {
       imageWidget = Image.network(
         imageUrl,
-        width: 68,
-        height: 68,
+        width: double.infinity,
+        height: double.infinity,
         fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => const Icon(Icons.broken_image, size: 32, color: Colors.grey),
+        errorBuilder: (_, __, ___) => Container(
+          color: const Color(0xFFE2E8F0),
+          child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
+        ),
       );
     } else {
       imageWidget = Container(
-        width: 68,
-        height: 68,
+        width: double.infinity,
+        height: double.infinity,
         color: const Color(0xFFF1F5F9),
-        child: const Icon(Icons.storefront_rounded, color: Colors.grey, size: 32),
+        child: const Center(
+          child: Icon(Icons.storefront_rounded, color: Colors.grey, size: 36),
+        ),
       );
     }
 
-    return Container(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.all(10),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFF1F5F9)),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.015),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
+    Color stockBadgeBg = const Color(0xFF15803D); // Dark Green
+    Color stockBadgeText = Colors.white;
+    String stockText = 'Stock: $stockQty';
+
+    if (isOutOfStock) {
+      stockBadgeBg = const Color(0xFFDC2626); // Red
+      stockBadgeText = Colors.white;
+      stockText = 'Out of Stock';
+    } else if (isLowStock) {
+      stockBadgeBg = const Color(0xFFD97706); // Amber/Orange
+      stockBadgeText = Colors.white;
+      stockText = 'Low: $stockQty left';
+    }
+
+    return GestureDetector(
+      onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
+      child: Container(
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(14),
+          border: Border.all(
+            color: cardGreenBorder,
+            width: 1.5,
           ),
-        ],
-      ),
-      child: Row(
-        children: [
-          ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: imageWidget,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14.5, color: textDark),
-                ),
-                if (category.isNotEmpty)
-                  Text(category, style: const TextStyle(fontSize: 11.5, color: primaryPurple)),
-                const SizedBox(height: 6),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    // Price & Unit Display
-                    Row(
-                      crossAxisAlignment: CrossAxisAlignment.baseline,
-                      textBaseline: TextBaseline.alphabetic,
-                      children: [
-                        Text(
-                          '₹$price',
-                          style: const TextStyle(
-                            fontWeight: FontWeight.w800,
-                            fontSize: 15.5,
-                            color: textDark,
-                          ),
-                        ),
-                        if (unit.isNotEmpty) ...[
-                          const SizedBox(width: 4),
-                          Text(
-                            '/ $unit',
-                            style: const TextStyle(
-                              fontSize: 11.5,
-                              fontWeight: FontWeight.w600,
-                              color: Color(0xFF64748B),
-                            ),
-                          ),
-                        ],
-                      ],
+          boxShadow: [
+            BoxShadow(
+              color: Colors.black.withOpacity(0.06),
+              blurRadius: 6,
+              offset: const Offset(0, 2),
+            ),
+          ],
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12.5),
+          child: Stack(
+            children: [
+              // 1. PRODUCT BACKGROUND IMAGE (FULL CARD)
+              Positioned.fill(
+                child: imageWidget,
+              ),
+
+              // 2. BRAND / CATEGORY BADGE ON TOP LEFT
+              if (brand.isNotEmpty || category.isNotEmpty)
+                Positioned(
+                  top: 6,
+                  left: 6,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.78),
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.white24, width: 0.6),
                     ),
-                    // Stock Status Badge
-                    Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                      decoration: BoxDecoration(
-                        color: isOutOfStock
-                            ? const Color(0xFFFEE2E2)
-                            : isLowStock
-                                ? const Color(0xFFFEF3C7)
-                                : const Color(0xFFDCFCE7),
-                        borderRadius: BorderRadius.circular(6),
+                    child: Text(
+                      brand.isNotEmpty ? brand : category,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 9,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 0.2,
                       ),
-                      child: Text(
-                        isOutOfStock
-                            ? 'Out of Stock'
-                            : isLowStock
-                                ? 'Low Stock: $stockQty'
-                                : '$stockQty in stock',
-                        style: TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.bold,
-                          color: isOutOfStock
-                              ? const Color(0xFF991B1B)
-                              : isLowStock
-                                  ? const Color(0xFF92400E)
-                                  : const Color(0xFF166534),
+                    ),
+                  ),
+                ),
+
+              // 3. EDIT & DELETE BUTTONS ON TOP RIGHT
+              Positioned(
+                top: 6,
+                right: 6,
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    // EDIT BUTTON (PENCIL ICON)
+                    GestureDetector(
+                      onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
+                      child: Container(
+                        padding: const EdgeInsets.all(4.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: const Color(0xFF60A5FA), width: 0.8),
+                        ),
+                        child: const Icon(
+                          Icons.edit_rounded,
+                          size: 13,
+                          color: Color(0xFF60A5FA),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 4),
+
+                    // DELETE BUTTON (TRASH ICON)
+                    GestureDetector(
+                      onTap: () => _deleteProduct(docId, name),
+                      child: Container(
+                        padding: const EdgeInsets.all(4.5),
+                        decoration: BoxDecoration(
+                          color: Colors.black.withOpacity(0.75),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: Colors.redAccent.withOpacity(0.8), width: 0.8),
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                          size: 13,
+                          color: Colors.redAccent,
                         ),
                       ),
                     ),
                   ],
                 ),
-              ],
-            ),
+              ),
+
+              // 4. DETAILS AT BOTTOM WITH MATCHING GOLD PRODUCT NAME
+              Positioned(
+                bottom: 0,
+                left: 0,
+                right: 0,
+                child: Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      colors: [
+                        Colors.black.withOpacity(0.96),
+                        Colors.black.withOpacity(0.85),
+                        Colors.black.withOpacity(0.50),
+                        Colors.transparent,
+                      ],
+                      stops: const [0.0, 0.4, 0.8, 1.0],
+                      begin: Alignment.bottomCenter,
+                      end: Alignment.topCenter,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      // Product Name (Matching Warm Gold)
+                      Text(
+                        name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 13,
+                          color: productNameGold,
+                          shadows: [
+                            Shadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 1)),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 2),
+
+                      // Price & Unit
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.baseline,
+                        textBaseline: TextBaseline.alphabetic,
+                        children: [
+                          Text(
+                            '₹$price',
+                            style: const TextStyle(
+                              fontWeight: FontWeight.w900,
+                              fontSize: 14.5,
+                              color: Color(0xFF4ADE80),
+                              shadows: [
+                                Shadow(color: Colors.black, blurRadius: 4),
+                              ],
+                            ),
+                          ),
+                          if (unit.isNotEmpty) ...[
+                            const SizedBox(width: 3),
+                            Flexible(
+                              child: Text(
+                                '/ $unit',
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: const TextStyle(
+                                  fontSize: 10,
+                                  fontWeight: FontWeight.bold,
+                                  color: Color(0xFFE2E8F0),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                      const SizedBox(height: 3),
+
+                      // Stock Status Pill
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                        decoration: BoxDecoration(
+                          color: stockBadgeBg,
+                          borderRadius: BorderRadius.circular(4),
+                          boxShadow: [
+                            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 2),
+                          ],
+                        ),
+                        child: Text(
+                          stockText,
+                          maxLines: 1,
+                          style: TextStyle(
+                            fontSize: 9,
+                            fontWeight: FontWeight.w800,
+                            color: stockBadgeText,
+                            letterSpacing: 0.1,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  // --- 6. BOTTOM SUMMARY PANEL ---
+  Widget _buildBottomSummaryPanel({
+    required int totalProducts,
+    required int pendingOrders,
+    required int totalOrders,
+    required double totalRevenue,
+  }) {
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Store Performance Summary',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                decoration: BoxDecoration(
+                  color: const Color(0xFFEEF2FF),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: const Text('Live', style: TextStyle(fontSize: 9.5, color: primaryPurple, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+          const Divider(height: 14, color: Color(0xFFF1F5F9)),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              _buildBottomStatItem('Total Items', '$totalProducts', Icons.inventory_2_outlined, primaryBlue),
+              _buildBottomStatItem('Active Orders', '$pendingOrders', Icons.pending_actions_rounded, Colors.deepOrange),
+              _buildBottomStatItem('Total Orders', '$totalOrders', Icons.shopping_bag_outlined, Colors.indigo),
+              _buildBottomStatItem('Revenue', '₹${totalRevenue.toStringAsFixed(0)}', Icons.currency_rupee_rounded, Colors.teal),
+            ],
           ),
         ],
       ),
     );
   }
 
-  // --- SECTION TITLE HELPERS ---
-  Widget _buildSectionTitle(String title) {
-    return Text(
-      title,
-      style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: textDark),
+  Widget _buildBottomStatItem(String label, String value, IconData icon, Color color) {
+    return Expanded(
+      child: Column(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(6),
+            decoration: BoxDecoration(
+              color: color.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Icon(icon, color: color, size: 16),
+          ),
+          const SizedBox(height: 3),
+          Text(
+            value,
+            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: textDark),
+          ),
+          Text(
+            label,
+            textAlign: TextAlign.center,
+            style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+          ),
+        ],
+      ),
     );
   }
 
-  Widget _buildMetricsHeader(String title) {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-      children: [
-        Text(
-          title,
-          style: const TextStyle(fontSize: 16.5, fontWeight: FontWeight.bold, color: textDark),
-        ),
-        InkWell(
-          onTap: () {
-            Navigator.push(
-              context,
-              MaterialPageRoute(builder: (_) => const OrdersScreen()),
-            );
-          },
-          child: const Row(
+  // --- PROFILE MENU BOTTOM SHEET ---
+  void _showProfileMenu(BuildContext context, String ownerName, String storeName, String location, String category) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 20),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              Text('View all', style: TextStyle(color: primaryBlue, fontSize: 12, fontWeight: FontWeight.bold)),
-              SizedBox(width: 2),
-              Icon(Icons.chevron_right_rounded, size: 16, color: primaryBlue),
+              Row(
+                children: [
+                  CircleAvatar(
+                    radius: 24,
+                    backgroundColor: primaryBlue,
+                    child: Text(
+                      ownerName.isNotEmpty ? ownerName[0].toUpperCase() : 'M',
+                      style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(storeName, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: textDark)),
+                        Text('Owner: $ownerName • $category', style: const TextStyle(fontSize: 12, color: Color(0xFF64748B))),
+                        Text(location, style: const TextStyle(fontSize: 11.5, color: primaryPurple)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const Divider(height: 22, color: Color(0xFFF1F5F9)),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.receipt_long_rounded, color: primaryBlue),
+                title: const Text('View All Orders', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const OrdersScreen()));
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.add_box_outlined, color: primaryPurple),
+                title: const Text('Add New Product', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: Colors.grey),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  Navigator.push(context, MaterialPageRoute(builder: (_) => const AddProductScreen()));
+                },
+              ),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.logout_rounded, color: Colors.redAccent),
+                title: const Text('Logout', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5, color: Colors.redAccent)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmLogout(context);
+                },
+              ),
             ],
           ),
         ),
-      ],
+      ),
     );
   }
 

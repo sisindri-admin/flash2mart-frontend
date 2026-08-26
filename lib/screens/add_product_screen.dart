@@ -11,7 +11,7 @@ class ProductVariantItem {
   final TextEditingController unitController;
   final TextEditingController priceController;
   final TextEditingController stockController;
-  int presentStock; // Stores existing stock from store
+  int presentStock;
 
   ProductVariantItem({
     String unit = '1 kg',
@@ -22,7 +22,6 @@ class ProductVariantItem {
         priceController = TextEditingController(text: price),
         stockController = TextEditingController(text: stock);
 
-  // Live calculation: Present Stock + Entered Value
   int get enteredStock => int.tryParse(stockController.text.trim()) ?? 0;
   int get totalStock => presentStock > 0 ? (presentStock + enteredStock) : enteredStock;
 
@@ -34,7 +33,15 @@ class ProductVariantItem {
 }
 
 class AddProductScreen extends StatefulWidget {
-  const AddProductScreen({super.key});
+  // ఎడిట్ మోడ్ కోసం పారామీటర్లు
+  final String? editDocId;
+  final Map<String, dynamic>? editData;
+
+  const AddProductScreen({
+    super.key,
+    this.editDocId,
+    this.editData,
+  });
 
   @override
   State<AddProductScreen> createState() => _AddProductScreenState();
@@ -48,17 +55,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
   final _descriptionController = TextEditingController();
   final FocusNode _nameFocusNode = FocusNode();
 
-  // Track if restock/editing existing product
   String? _selectedExistingDocId;
 
-  // Dynamic Quantity / Pack Sizes List
   List<ProductVariantItem> _variants = [
     ProductVariantItem(unit: '1 kg', price: '', stock: '100', presentStock: 0),
   ];
 
-  // All Store Products for Top Selector
   List<QueryDocumentSnapshot> _allProducts = [];
-  String _topStockFilter = 'All'; // 'All', 'Low Stock', 'Out of Stock', 'In Stock'
+  String _topStockFilter = 'All';
   bool _isLoadingProducts = true;
 
   final ImagePicker _picker = ImagePicker();
@@ -76,13 +80,57 @@ class _AddProductScreenState extends State<AddProductScreen> {
   @override
   void initState() {
     super.initState();
-    _fetchAllStoreProducts();
-    _nameFocusNode.addListener(() {
-      setState(() {});
-    });
+    _initEditModeOrFetchAll();
   }
 
-  // Fetch All Products for the Merchant
+  void _initEditModeOrFetchAll() {
+    // కార్డ్ నుండి ఎడిట్ మోడ్‌లో ఓపెన్ అయినప్పుడు వివరాలు లోడ్ చేయడం
+    if (widget.editDocId != null && widget.editData != null) {
+      _selectedExistingDocId = widget.editDocId;
+      final data = widget.editData!;
+      _nameController.text = data['name'] ?? '';
+      _brandController.text = data['brand'] ?? '';
+      _categoryController.text = data['category'] ?? 'Grocery / Supermarket';
+      _descriptionController.text = data['description'] ?? '';
+
+      final String img = data['imageBase64'] ?? '';
+      if (img.isNotEmpty) {
+        try {
+          _imageBytes = base64Decode(img);
+        } catch (_) {}
+      }
+
+      final rawVariants = data['variants'] as List<dynamic>?;
+      if (rawVariants != null && rawVariants.isNotEmpty) {
+        _variants.clear();
+        for (var item in rawVariants) {
+          final m = item as Map<String, dynamic>;
+          final int existingStock = (m['stock'] is int ? m['stock'] : int.tryParse('${m['stock']}')) ?? 0;
+          _variants.add(
+            ProductVariantItem(
+              unit: m['unit'] ?? '1 kg',
+              price: '${m['price'] ?? ''}',
+              stock: '',
+              presentStock: existingStock,
+            ),
+          );
+        }
+      } else {
+        final int existingStock = (data['stock'] is int ? data['stock'] : int.tryParse('${data['stock']}')) ?? 0;
+        _variants = [
+          ProductVariantItem(
+            unit: data['unit'] ?? '1 kg',
+            price: '${data['price'] ?? ''}',
+            stock: '',
+            presentStock: existingStock,
+          ),
+        ];
+      }
+    }
+
+    _fetchAllStoreProducts();
+  }
+
   Future<void> _fetchAllStoreProducts() async {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -104,7 +152,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
-  // Auto-Fill when any product is tapped from top inventory suggestions
   void _selectProductFromInventory(QueryDocumentSnapshot doc) {
     final data = doc.data() as Map<String, dynamic>;
 
@@ -115,7 +162,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
       _categoryController.text = data['category'] ?? 'Grocery / Supermarket';
       _descriptionController.text = data['description'] ?? '';
 
-      // Load Image
       final String imageBase64 = data['imageBase64'] ?? '';
       if (imageBase64.isNotEmpty) {
         try {
@@ -127,7 +173,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
         _imageBytes = null;
       }
 
-      // Load Variants with their current Present Stock
       for (var v in _variants) {
         v.dispose();
       }
@@ -142,7 +187,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
             ProductVariantItem(
               unit: m['unit'] ?? '1 kg',
               price: '${m['price'] ?? ''}',
-              stock: '', // Empty so merchant can enter what to ADD (e.g. 50)
+              stock: '',
               presentStock: existingStock,
             ),
           );
@@ -162,7 +207,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text('Selected "${data['name']}". Enter new stock in box to add!'),
+        content: Text('Loaded "${data['name']}". Edit details & save!'),
         backgroundColor: Colors.teal,
         behavior: SnackBarBehavior.floating,
         duration: const Duration(seconds: 2),
@@ -170,7 +215,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // Reset to empty new product form
   void _resetFormForNewProduct() {
     setState(() {
       _selectedExistingDocId = null;
@@ -326,12 +370,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         imageBase64 = base64Encode(_imageBytes!);
       }
 
-      // Calculate variant list using total calculated stock (Present + Added)
       final List<Map<String, dynamic>> variantDataList = _variants.map((v) {
         return {
           'unit': v.unitController.text.trim(),
           'price': double.tryParse(v.priceController.text.trim()) ?? 0.0,
-          'stock': v.totalStock, // Saves Present Stock + Entered Value
+          'stock': v.totalStock,
         };
       }).toList();
 
@@ -354,14 +397,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
       };
 
       if (_selectedExistingDocId != null) {
-        // Update existing product in Firestore
+        // Firestore లో ప్రొడక్ట్‌ను అప్‌డేట్ చేయడం
         await FirebaseFirestore.instance
             .collection('products')
             .doc(_selectedExistingDocId)
             .update(docData);
-        _showMessage('Product restocked & updated successfully!');
+        _showMessage('Product updated & saved successfully!');
       } else {
-        // Add new product
+        // కొత్త ప్రొడక్ట్ యాడ్ చేయడం
         final newDocRef = FirebaseFirestore.instance.collection('products').doc();
         docData['productId'] = newDocRef.id;
         docData['createdAt'] = FieldValue.serverTimestamp();
@@ -405,6 +448,8 @@ class _AddProductScreenState extends State<AddProductScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final bool isEditMode = _selectedExistingDocId != null;
+
     return Scaffold(
       backgroundColor: bgGrey,
       appBar: AppBar(
@@ -413,11 +458,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
         foregroundColor: textDark,
         centerTitle: true,
         title: Text(
-          _selectedExistingDocId != null ? 'Restock / Edit Product' : 'Add Product & Quantities',
+          isEditMode ? 'Edit / Update Product' : 'Add Product & Quantities',
           style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 18, color: textDark),
         ),
         actions: [
-          if (_selectedExistingDocId != null)
+          if (isEditMode)
             TextButton.icon(
               onPressed: _resetFormForNewProduct,
               icon: const Icon(Icons.add, size: 16, color: primaryBlue),
@@ -435,13 +480,13 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // --- TOP: ALL STOCKS & INVENTORY SUGGESTIONS ---
+                    // TOP INVENTORY SUGGESTIONS
                     _buildAllStoreStockSelector(),
                     const SizedBox(height: 14),
 
-                    // --- CARD 1: PRODUCT & BRAND DETAILS ---
+                    // CARD 1: PRODUCT & BRAND DETAILS
                     _buildFormCard(
-                      title: _selectedExistingDocId != null ? 'Product Details (Selected for Restock)' : 'Product & Brand Details',
+                      title: isEditMode ? 'Product Details (Editing)' : 'Product & Brand Details',
                       icon: Icons.inventory_2_outlined,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -450,7 +495,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                             controller: _nameController,
                             focusNode: _nameFocusNode,
                             label: 'Product Name',
-                            hint: 'Click above to pick existing product or enter new name',
+                            hint: 'Enter product name',
                             icon: Icons.shopping_basket_outlined,
                             validator: (val) => val == null || val.trim().isEmpty ? 'Enter product name' : null,
                           ),
@@ -512,15 +557,15 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- CARD 2: QUANTITY, PRICING & STOCK WITH LIVE CALCULATION ---
+                    // CARD 2: QUANTITY, PRICING & STOCK
                     _buildFormCard(
-                      title: 'Quantities, Prices & Stock (Pack Sizes)',
+                      title: 'Quantities, Prices & Stock',
                       icon: Icons.layers_outlined,
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'స్టాక్ బాక్స్‌లో యాడ్ చేయవలసిన నంబర్ ఎంటర్ చేస్తే కింద టోటల్ కనిపిస్తుంది:',
+                            'ధర మరియు స్టాక్ మార్పులు చేయండి:',
                             style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                           ),
                           const SizedBox(height: 12),
@@ -560,7 +605,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                     Row(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Unit / Qty
+                                        // Qty / Unit
                                         Expanded(
                                           flex: 4,
                                           child: _buildTextField(
@@ -587,7 +632,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                         ),
                                         const SizedBox(width: 8),
 
-                                        // Stock Box + Small Live Addition Badge Underneath
+                                        // Stock Box + Live Addition Badge
                                         Expanded(
                                           flex: 4,
                                           child: Column(
@@ -599,7 +644,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                                 hint: variant.presentStock > 0 ? 'e.g. 50' : '100',
                                                 icon: Icons.inventory_outlined,
                                                 keyboardType: TextInputType.number,
-                                                onChanged: (val) => setState(() {}), // Trigger live calculation
+                                                onChanged: (val) => setState(() {}),
                                                 validator: (val) {
                                                   if (variant.presentStock == 0 && (val == null || val.trim().isEmpty)) {
                                                     return 'Enter stock';
@@ -609,13 +654,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                               ),
                                               const SizedBox(height: 4),
 
-                                              // CHINNA SIZE PRESENT STOCK + ENTERED STOCK DISPLAY
                                               Container(
                                                 padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2.5),
                                                 decoration: BoxDecoration(
                                                   color: variant.presentStock > 0
-                                                      ? const Color(0xFFFEF3C7) // Amber/Yellow badge
-                                                      : const Color(0xFFEEF2FF), // Blue badge
+                                                      ? const Color(0xFFFEF3C7)
+                                                      : const Color(0xFFEEF2FF),
                                                   borderRadius: BorderRadius.circular(6),
                                                   border: Border.all(
                                                     color: variant.presentStock > 0
@@ -665,7 +709,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // --- CARD 3: DESCRIPTION ---
+                    // CARD 3: DESCRIPTION
                     _buildFormCard(
                       title: 'Description (Optional)',
                       icon: Icons.description_outlined,
@@ -679,19 +723,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // --- 4. SQUARE IMAGE UPLOADER ---
+                    // 4. SQUARE IMAGE UPLOADER
                     Center(
                       child: _buildSquareImageUploader(),
                     ),
                     const SizedBox(height: 24),
 
-                    // --- 5. SAVE / UPDATE BUTTON ---
+                    // 5. SAVE / UPDATE BUTTON
                     SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: _selectedExistingDocId != null ? Colors.teal : primaryBlue,
+                          backgroundColor: isEditMode ? Colors.teal : primaryBlue,
                           foregroundColor: Colors.white,
                           elevation: 2,
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -701,12 +745,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
                             Icon(
-                              _selectedExistingDocId != null ? Icons.published_with_changes_rounded : Icons.check_circle_outline_rounded,
+                              isEditMode ? Icons.check_circle_outline_rounded : Icons.add_circle_outline_rounded,
                               size: 20,
                             ),
                             const SizedBox(width: 8),
                             Text(
-                              _selectedExistingDocId != null ? 'Update & Restock Product' : 'Save Product & Stock',
+                              isEditMode ? 'Update Product & Stock' : 'Save Product & Stock',
                               style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 16),
                             ),
                           ],
@@ -721,7 +765,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // --- ALL STORE STOCKS SELECTOR (AT TOP) ---
+  // --- ALL STORE STOCKS SELECTOR ---
   Widget _buildAllStoreStockSelector() {
     if (_isLoadingProducts) {
       return const SizedBox(
@@ -783,7 +827,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
               ),
               const SizedBox(width: 8),
               const Text(
-                'Store Inventory Suggestions:',
+                'Quick Pick Existing Product:',
                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
               ),
               const Spacer(),
