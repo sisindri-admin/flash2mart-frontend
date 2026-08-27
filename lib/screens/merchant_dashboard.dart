@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../constants/app_colors.dart';
+import '../services/location_service.dart';
 import 'add_product_screen.dart';
 import 'orders_screen.dart';
 
@@ -39,6 +40,238 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     super.dispose();
   }
 
+  // --- LOCATION BOTTOM SHEET (LIVE GPS + MANUAL ADDRESS INPUT) ---
+  void _showLocationEditBottomSheet(BuildContext context, String merchantId, String currentSavedLocation) {
+    final TextEditingController manualLocationController = TextEditingController();
+    String liveDetectedAddress = currentSavedLocation;
+    bool isDetecting = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.white,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (ctx) => StatefulBuilder(
+        builder: (context, setModalState) {
+          return Padding(
+            padding: EdgeInsets.only(
+              left: 20,
+              right: 20,
+              top: 20,
+              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header Row
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Row(
+                      children: [
+                        Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 22),
+                        SizedBox(width: 8),
+                        Text(
+                          'Set Shop Location',
+                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textDark),
+                        ),
+                      ],
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close_rounded, size: 20, color: Colors.grey),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+                const Text(
+                  'Live GPS అడ్రస్ లేదా మీ సొంత అడ్రస్‌ను మాన్యువల్‌గా సెట్ చేసుకోండి:',
+                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 16),
+
+                // FIELD 1: AUTO DETECTED LIVE GPS LOCATION
+                const Text(
+                  '1. Live GPS Location (Auto-Detected)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: primaryBlue),
+                ),
+                const SizedBox(height: 6),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFEFF6FF),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: const Color(0xFFBFDBFE)),
+                  ),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      const Icon(Icons.my_location_rounded, color: primaryBlue, size: 18),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              liveDetectedAddress.isNotEmpty ? liveDetectedAddress : 'Detecting GPS...',
+                              style: const TextStyle(
+                                fontSize: 12.5,
+                                fontWeight: FontWeight.w600,
+                                color: textDark,
+                              ),
+                            ),
+                            const SizedBox(height: 3),
+                            const Text(
+                              'Google Maps ఆధారంగా తీసుకున్న లైవ్ అడ్రస్',
+                              style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      InkWell(
+                        onTap: isDetecting
+                            ? null
+                            : () async {
+                                setModalState(() => isDetecting = true);
+                                final res = await LocationService.instance.getCurrentLiveLocation();
+                                if (res.success) {
+                                  setModalState(() {
+                                    liveDetectedAddress = res.address;
+                                    isDetecting = false;
+                                  });
+                                } else {
+                                  setModalState(() => isDetecting = false);
+                                  _showSnackBar(res.errorMessage ?? 'GPS Error', Colors.redAccent);
+                                }
+                              },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: const Color(0xFF93C5FD)),
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (isDetecting)
+                                const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5))
+                              else
+                                const Icon(Icons.refresh_rounded, size: 12, color: primaryBlue),
+                              const SizedBox(width: 3),
+                              const Text('Re-Detect', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: primaryBlue)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // FIELD 2: MANUAL CUSTOM ADDRESS INPUT
+                const Text(
+                  '2. Manual Custom Address (Optional)',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
+                ),
+                const SizedBox(height: 6),
+                TextField(
+                  controller: manualLocationController,
+                  maxLines: 2,
+                  style: const TextStyle(fontSize: 13, color: textDark),
+                  decoration: InputDecoration(
+                    hintText: 'ఉదా: Shop No. 5, Opp. RTC Bus Stand, Trunk Road, Nellore',
+                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
+                    prefixIcon: const Icon(Icons.edit_location_alt_outlined, color: primaryPurple, size: 20),
+                    filled: true,
+                    fillColor: const Color(0xFFF8FAFC),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(14),
+                      borderSide: const BorderSide(color: primaryBlue, width: 1.5),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 6),
+                const Text(
+                  'మాన్యువల్ అడ్రస్ ఎంటర్ చేస్తే అది సేవ్ అవుతుంది, లేకపోతే లైవ్ GPS అడ్రస్ సేవ్ అవుతుంది.',
+                  style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
+                ),
+                const SizedBox(height: 20),
+
+                // SAVE LOCATION BUTTON
+                SizedBox(
+                  width: double.infinity,
+                  height: 48,
+                  child: ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: primaryBlue,
+                      foregroundColor: Colors.white,
+                      elevation: 2,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                    ),
+                    onPressed: () async {
+                      final manualText = manualLocationController.text.trim();
+                      final finalLocation = manualText.isNotEmpty ? manualText : liveDetectedAddress;
+
+                      await FirebaseFirestore.instance.collection('merchants').doc(merchantId).set({
+                        'location': finalLocation,
+                        'isManualLocation': manualText.isNotEmpty,
+                        'lastLocationUpdate': FieldValue.serverTimestamp(),
+                      }, SetOptions(merge: true));
+
+                      if (mounted) {
+                        Navigator.pop(ctx);
+                        _showSnackBar(
+                          manualText.isNotEmpty
+                              ? 'Manual address saved: $finalLocation'
+                              : 'Live GPS address saved: $finalLocation',
+                          Colors.teal,
+                        );
+                      }
+                    },
+                    child: const Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.check_circle_outline_rounded, size: 18),
+                        SizedBox(width: 6),
+                        Text('Save Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+    );
+  }
+
+  void _showSnackBar(String message, Color bgColor) {
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(message),
+          backgroundColor: bgColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+        ),
+      );
+    }
+  }
+
   // Delete Product with Confirmation Dialog
   Future<void> _deleteProduct(String docId, String productName) async {
     final bool? confirm = await showDialog<bool>(
@@ -67,26 +300,9 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     if (confirm == true) {
       try {
         await FirebaseFirestore.instance.collection('products').doc(docId).delete();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Product "$productName" deleted successfully.'),
-              backgroundColor: Colors.redAccent,
-              behavior: SnackBarBehavior.floating,
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-            ),
-          );
-        }
+        _showSnackBar('Product "$productName" deleted successfully.', Colors.redAccent);
       } catch (e) {
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Failed to delete product: $e'),
-              backgroundColor: Colors.red,
-              behavior: SnackBarBehavior.floating,
-            ),
-          );
-        }
+        _showSnackBar('Failed to delete product: $e', Colors.red);
       }
     }
   }
@@ -127,26 +343,9 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
         'updatedAt': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
 
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: const Text('Store image updated successfully!'),
-            backgroundColor: Colors.teal,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-          ),
-        );
-      }
+      _showSnackBar('Store image updated successfully!', Colors.teal);
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update store image: $e'),
-            backgroundColor: Colors.redAccent,
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showSnackBar('Failed to update store image: $e', Colors.redAccent);
     }
   }
 
@@ -161,14 +360,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
         'lastActive': FieldValue.serverTimestamp(),
       });
     } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Failed to update status: $e'),
-            behavior: SnackBarBehavior.floating,
-          ),
-        );
-      }
+      _showSnackBar('Failed to update status: $e', Colors.redAccent);
     }
   }
 
@@ -280,7 +472,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. TOP HEADER
+                          // 1. TOP HEADER WITH CLICKABLE LOCATION (OPENS BOTTOM SHEET)
                           _buildTopHeader(
                             storeName: storeName,
                             location: location,
@@ -319,7 +511,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                           ),
                           const SizedBox(height: 10),
 
-                          // 5. PRODUCT CARDS GRID (WITH EDIT & DELETE OPTIONS)
+                          // 5. PRODUCT CARDS GRID
                           if (_isInventoryExpanded)
                             _buildProductsSquareGrid(filteredProducts)
                           else
@@ -360,7 +552,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 1. TOP HEADER ---
+  // --- 1. TOP HEADER (LOCATION CLICKS OPEN BOTTOM SHEET) ---
   Widget _buildTopHeader({
     required String storeName,
     required String location,
@@ -373,7 +565,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Store Name & Location
+        // Store Name & Clickable Location
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -425,24 +617,52 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                   ),
                 ],
               ),
-              const SizedBox(height: 2),
-              Row(
-                children: [
-                  const Icon(Icons.location_on_rounded, size: 13, color: Colors.redAccent),
-                  const SizedBox(width: 2),
-                  Flexible(
-                    child: Text(
-                      location,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 11.5,
-                        fontWeight: FontWeight.w500,
-                        color: Color(0xFF64748B),
+              const SizedBox(height: 3),
+
+              // CLICKABLE LOCATION ROW (OPENS BOTTOM SHEET)
+              InkWell(
+                onTap: () => _showLocationEditBottomSheet(context, merchantId, location),
+                borderRadius: BorderRadius.circular(8),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.location_on_rounded, size: 14, color: Colors.redAccent),
+                      const SizedBox(width: 3),
+                      Flexible(
+                        child: Text(
+                          location,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.w600,
+                            color: Color(0xFF64748B),
+                            decoration: TextDecoration.underline,
+                            decorationStyle: TextDecorationStyle.dotted,
+                          ),
+                        ),
                       ),
-                    ),
+                      const SizedBox(width: 4),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1.5),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFEFF6FF),
+                          borderRadius: BorderRadius.circular(6),
+                          border: Border.all(color: const Color(0xFFBFDBFE)),
+                        ),
+                        child: const Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Icon(Icons.edit_location_rounded, size: 11, color: primaryBlue),
+                            SizedBox(width: 2),
+                            Text('Edit', style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: primaryBlue)),
+                          ],
+                        ),
+                      ),
+                    ],
                   ),
-                ],
+                ),
               ),
             ],
           ),
@@ -503,7 +723,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
 
         // Profile Avatar
         GestureDetector(
-          onTap: () => _showProfileMenu(context, ownerName, storeName, location, category),
+          onTap: () => _showProfileMenu(context, ownerName, storeName, location, category, merchantId),
           child: Container(
             width: 36,
             height: 36,
@@ -1040,7 +1260,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // EDIT BUTTON (PENCIL ICON)
+                    // EDIT BUTTON
                     GestureDetector(
                       onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
                       child: Container(
@@ -1059,7 +1279,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                     ),
                     const SizedBox(width: 4),
 
-                    // DELETE BUTTON (TRASH ICON)
+                    // DELETE BUTTON
                     GestureDetector(
                       onTap: () => _deleteProduct(docId, name),
                       child: Container(
@@ -1267,7 +1487,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   }
 
   // --- PROFILE MENU BOTTOM SHEET ---
-  void _showProfileMenu(BuildContext context, String ownerName, String storeName, String location, String category) {
+  void _showProfileMenu(BuildContext context, String ownerName, String storeName, String location, String category, String merchantId) {
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
@@ -1305,6 +1525,17 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ],
               ),
               const Divider(height: 22, color: Color(0xFFF1F5F9)),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.my_location_rounded, color: Colors.redAccent),
+                title: const Text('Edit / Update Shop Location', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                subtitle: const Text('Live GPS లేదా మాన్యువల్ అడ్రస్ సెట్ చేసుకోండి', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: primaryBlue),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showLocationEditBottomSheet(context, merchantId, location);
+                },
+              ),
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.receipt_long_rounded, color: primaryBlue),
