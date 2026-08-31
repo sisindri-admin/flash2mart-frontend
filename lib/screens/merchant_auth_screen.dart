@@ -3,6 +3,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 
 import '../constants/app_colors.dart';
+import '../services/location_service.dart';
 
 class MerchantAuthScreen extends StatefulWidget {
   const MerchantAuthScreen({super.key});
@@ -15,6 +16,7 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   bool isLoading = false;
+  bool isFetchingLocation = false;
 
   // Login Controllers
   final TextEditingController _loginEmailController = TextEditingController();
@@ -27,6 +29,10 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   final TextEditingController _regPhoneController = TextEditingController();
   final TextEditingController _locationController = TextEditingController();
   final TextEditingController _regPasswordController = TextEditingController();
+
+  // Stored Coordinates from Live GPS
+  double? _detectedLat;
+  double? _detectedLng;
 
   final FirebaseAuth _auth = FirebaseAuth.instance;
   final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -58,6 +64,27 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
     _locationController.dispose();
     _regPasswordController.dispose();
     super.dispose();
+  }
+
+  // Fetch Live Location using LocationService and Auto-Fill
+  Future<void> _fetchLiveLocation() async {
+    setState(() => isFetchingLocation = true);
+
+    final result = await LocationService.instance.getCurrentLiveLocation();
+
+    if (mounted) {
+      setState(() => isFetchingLocation = false);
+      if (result.success) {
+        setState(() {
+          _locationController.text = result.address;
+          _detectedLat = result.latitude;
+          _detectedLng = result.longitude;
+        });
+        _showMessage('Live location detected successfully!');
+      } else {
+        _showMessage(result.errorMessage ?? 'Failed to get location');
+      }
+    }
   }
 
   Future<void> _handleLogin() async {
@@ -126,6 +153,9 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
         'phone': phone,
         'category': selectedCategory,
         'location': location,
+        'latitude': _detectedLat,
+        'longitude': _detectedLng,
+        'isOnline': true,
         'createdAt': FieldValue.serverTimestamp(),
       });
 
@@ -162,7 +192,11 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
   void _showMessage(String msg) {
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(msg)),
+      SnackBar(
+        content: Text(msg),
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
+      ),
     );
   }
 
@@ -353,12 +387,37 @@ class _MerchantAuthScreenState extends State<MerchantAuthScreen>
             ),
           ),
           const SizedBox(height: 12),
+
+          // LOCATION FIELD WITH LIVE GPS ICON BUTTON
           TextField(
             controller: _locationController,
-            decoration: const InputDecoration(
-              labelText: 'City / Location',
-              prefixIcon: Icon(Icons.location_on),
-              border: OutlineInputBorder(),
+            maxLines: 2,
+            minLines: 1,
+            decoration: InputDecoration(
+              labelText: 'Shop Location / Address',
+              hintText: 'Enter address or tap GPS icon',
+              prefixIcon: const Icon(Icons.location_on, color: Colors.redAccent),
+              suffixIcon: Padding(
+                padding: const EdgeInsets.only(right: 6),
+                child: isFetchingLocation
+                    ? const SizedBox(
+                        width: 24,
+                        height: 24,
+                        child: Center(
+                          child: SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          ),
+                        ),
+                      )
+                    : IconButton(
+                        tooltip: 'Detect Live GPS Location',
+                        icon: const Icon(Icons.my_location_rounded, color: AppColors.primary),
+                        onPressed: _fetchLiveLocation,
+                      ),
+              ),
+              border: const OutlineInputBorder(),
             ),
           ),
           const SizedBox(height: 12),
