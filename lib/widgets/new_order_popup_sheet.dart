@@ -1,4 +1,4 @@
-import 'package:audioplayers/audioplayers.dart'; // Audio Player Package
+import 'package:audioplayers/audioplayers.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 
@@ -23,23 +23,22 @@ class _NewOrderPopupSheetState extends State<NewOrderPopupSheet> {
   void initState() {
     super.initState();
     _audioPlayer = AudioPlayer();
-    _playRingtone(); // Popup స్క్రీన్ పై రాగానే sound ప్లే అవుతుంది
+    _playRingtone();
   }
 
-  // Ringtone Play Function (Repeats continuously like Swiggy)
+  // Ringtone Play Function (Compatible with Web, Android & iOS)
   Future<void> _playRingtone() async {
     try {
-      await _audioPlayer.setReleaseMode(ReleaseMode.loop); // లూప్‌లో ప్లే అవుతుంది
-      await _audioPlayer.setVolume(1.0); // Full Volume
+      await _audioPlayer.setReleaseMode(ReleaseMode.loop);
+      await _audioPlayer.setVolume(1.0);
       
-      // STEP 1 FIX: 'sounds/' కి బదులుగా 'assets/sounds/' పూర్తి పాత్ ఇవ్వబడింది
-      await _audioPlayer.play(AssetSource('assets/sounds/order_ringtone.mp3'));
+      // AssetSource లో 'sounds/order_ringtone.mp3' ఇవ్వడం జరిగింది
+      await _audioPlayer.play(AssetSource('sounds/order_ringtone.mp3'));
     } catch (e) {
       debugPrint("Audio Playback Error: $e");
     }
   }
 
-  // Ringtone Stop Function
   Future<void> _stopRingtone() async {
     try {
       await _audioPlayer.stop();
@@ -50,7 +49,7 @@ class _NewOrderPopupSheetState extends State<NewOrderPopupSheet> {
 
   @override
   void dispose() {
-    _stopRingtone(); // Popup క్లోజ్ కాగానే sound ఆగిపోతుంది
+    _stopRingtone();
     _audioPlayer.dispose();
     super.dispose();
   }

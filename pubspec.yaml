@@ -63,17 +63,19 @@ dev_dependencies:
 
 # The following section is specific to Flutter packages.
 flutter:
+  uses-material-design: true
   assets:
     - assets/images/customer role icon.png
     - assets/images/retailer role icon.png
     - assets/images/delevery partner role icon.png
     - assets/images/flashrider role icon.png
+    - assets/sounds/
     - assets/sounds/order_ringtone.mp3
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
   # the material Icons class.
-  uses-material-design: true
+  
 
   # To add assets to your application, add an assets section, like this:
   # assets:
