@@ -30,7 +30,10 @@ class _NewOrderPopupSheetState extends State<NewOrderPopupSheet> {
   Future<void> _playRingtone() async {
     try {
       await _audioPlayer.setReleaseMode(ReleaseMode.loop); // లూప్‌లో ప్లే అవుతుంది
-      await _audioPlayer.play(AssetSource('sounds/order_ringtone.mp3'));
+      await _audioPlayer.setVolume(1.0); // Full Volume
+      
+      // STEP 1 FIX: 'sounds/' కి బదులుగా 'assets/sounds/' పూర్తి పాత్ ఇవ్వబడింది
+      await _audioPlayer.play(AssetSource('assets/sounds/order_ringtone.mp3'));
     } catch (e) {
       debugPrint("Audio Playback Error: $e");
     }
