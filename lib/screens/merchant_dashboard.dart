@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -7,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../constants/app_colors.dart';
 import '../services/location_service.dart';
+import '../widgets/new_order_popup_sheet.dart';
 import 'add_product_screen.dart';
 import 'orders_screen.dart';
 
@@ -26,18 +28,82 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   bool _isInventoryExpanded = true;
   String _selectedCategory = 'All';
 
+  // Stream Subscription & Order Popup Control
+  StreamSubscription<QuerySnapshot>? _orderSubscription;
+  bool _isPopupShowing = false;
+
   // Theme Colors
   static const Color primaryBlue = Color(0xFF2563EB);
   static const Color primaryPurple = Color(0xFF4F46E5);
-  static const Color cardGreenBorder = Color(0xFF16A34A); // Outer Green Border
-  static const Color productNameGold = Color(0xFFFDE047); // Matching Warm Gold Accent
+  static const Color cardGreenBorder = Color(0xFF16A34A);
+  static const Color productNameGold = Color(0xFFFDE047);
   static const Color bgGrey = Color(0xFFF8FAFC);
   static const Color textDark = Color(0xFF1E293B);
 
   @override
+  void initState() {
+    super.initState();
+    _listenForNewOrders();
+  }
+
+  @override
   void dispose() {
+    _orderSubscription?.cancel();
     _searchController.dispose();
     super.dispose();
+  }
+
+  // --- REALTIME NEW ORDERS LISTENER (FIXED FOR EXACT FIRESTORE KEYS) ---
+  void _listenForNewOrders() {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    _orderSubscription = FirebaseFirestore.instance
+        .collection('orders')
+        .where('merchantId', isEqualTo: user.uid)
+        .snapshots()
+        .listen((snapshot) {
+      for (var change in snapshot.docChanges) {
+        if (change.type == DocumentChangeType.added || change.type == DocumentChangeType.modified) {
+          final orderData = change.doc.data() as Map<String, dynamic>?;
+          if (orderData == null) continue;
+
+          // orderStatus మరియు status రెండింటినీ తనిఖీ చేస్తుంది
+          final String rawStatus = (orderData['orderStatus'] ?? orderData['status'] ?? '').toString();
+          final String status = rawStatus.trim().toLowerCase();
+
+          if ((status == 'pending' || status == 'placed' || status == 'ordered') && !_isPopupShowing) {
+            _showNewOrderBottomSheet(change.doc.id, orderData);
+          }
+        }
+      }
+    });
+  }
+
+  void _showNewOrderBottomSheet(String orderId, Map<String, dynamic> orderData) {
+    if (!mounted || _isPopupShowing) return;
+
+    setState(() {
+      _isPopupShowing = true;
+    });
+
+    showModalBottomSheet(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => NewOrderPopupSheet(
+        orderId: orderId,
+        orderData: orderData,
+      ),
+    ).then((_) {
+      if (mounted) {
+        setState(() {
+          _isPopupShowing = false;
+        });
+      }
+    });
   }
 
   // --- LOCATION BOTTOM SHEET (LIVE GPS + MANUAL ADDRESS INPUT) ---
@@ -66,7 +132,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // Header Row
                 Row(
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
@@ -92,7 +157,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ),
                 const SizedBox(height: 16),
 
-                // FIELD 1: AUTO DETECTED LIVE GPS LOCATION
                 const Text(
                   '1. Live GPS Location (Auto-Detected)',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: primaryBlue),
@@ -172,7 +236,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ),
                 const SizedBox(height: 16),
 
-                // FIELD 2: MANUAL CUSTOM ADDRESS INPUT
                 const Text(
                   '2. Manual Custom Address (Optional)',
                   style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
@@ -210,7 +273,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ),
                 const SizedBox(height: 20),
 
-                // SAVE LOCATION BUTTON
                 SizedBox(
                   width: double.infinity,
                   height: 48,
@@ -272,7 +334,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     }
   }
 
-  // Delete Product with Confirmation Dialog
   Future<void> _deleteProduct(String docId, String productName) async {
     final bool? confirm = await showDialog<bool>(
       context: context,
@@ -307,7 +368,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     }
   }
 
-  // Navigate to Edit Product
   void _editProduct(String docId, Map<String, dynamic> data) {
     Navigator.push(
       context,
@@ -320,7 +380,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // Pick Store Image from Gallery & Save to Firestore
   Future<void> _pickAndUploadStoreImage(String merchantId) async {
     try {
       final XFile? file = await ImagePicker().pickImage(
@@ -349,7 +408,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     }
   }
 
-  // Toggle Store Online/Offline status in Firestore
   Future<void> _toggleOnlineStatus(String merchantId, bool currentStatus) async {
     try {
       await FirebaseFirestore.instance
@@ -437,7 +495,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                     final int pendingOrders = _countPending(orders);
                     final double totalRevenue = _sumRevenue(orders);
 
-                    // Dynamic Categories
                     final Set<String> dynamicCategories = {'All'};
                     for (var doc in products) {
                       final data = doc.data() as Map<String, dynamic>;
@@ -447,7 +504,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                       }
                     }
 
-                    // Product Filter Logic
                     var filteredProducts = products.where((doc) {
                       final data = doc.data() as Map<String, dynamic>;
                       final name = (data['name'] ?? '').toString().toLowerCase();
@@ -472,7 +528,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // 1. TOP HEADER WITH CLICKABLE LOCATION (OPENS BOTTOM SHEET)
                           _buildTopHeader(
                             storeName: storeName,
                             location: location,
@@ -484,13 +539,11 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                           ),
                           const SizedBox(height: 10),
 
-                          // EXPANDABLE SEARCH BOX
                           if (_isSearchOpen) ...[
                             _buildToggledSearchBar(),
                             const SizedBox(height: 10),
                           ],
 
-                          // 2. STORE IMAGE CARD
                           Center(
                             child: _buildAdjustedStoreImageCard(
                               merchantId: merchantId,
@@ -500,32 +553,28 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                           ),
                           const SizedBox(height: 14),
 
-                          // 3. ACTION BUTTONS
                           _buildActionButtons(context, pendingOrders),
                           const SizedBox(height: 14),
 
-                          // 4. CLEAN MINI INVENTORY CONTROL BAR
                           _buildCleanInventoryControlBar(
                             totalProducts: totalProducts,
                             categories: dynamicCategories.toList(),
                           ),
                           const SizedBox(height: 10),
 
-                          // 5. PRODUCT CARDS GRID
                           if (_isInventoryExpanded)
                             _buildProductsSquareGrid(filteredProducts)
                           else
                             const SizedBox.shrink(),
                           const SizedBox(height: 18),
 
-                          // 6. BOTTOM SUMMARY PANEL
                           _buildBottomSummaryPanel(
                             totalProducts: totalProducts,
                             pendingOrders: pendingOrders,
                             totalOrders: totalOrders,
                             totalRevenue: totalRevenue,
                           ),
-                          const SizedBox(height: 75), // Space for FAB
+                          const SizedBox(height: 75),
                         ],
                       ),
                     );
@@ -552,7 +601,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 1. TOP HEADER (LOCATION CLICKS OPEN BOTTOM SHEET) ---
   Widget _buildTopHeader({
     required String storeName,
     required String location,
@@ -565,7 +613,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.center,
       children: [
-        // Store Name & Clickable Location
         Expanded(
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -618,8 +665,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ],
               ),
               const SizedBox(height: 3),
-
-              // CLICKABLE LOCATION ROW (OPENS BOTTOM SHEET)
               InkWell(
                 onTap: () => _showLocationEditBottomSheet(context, merchantId, location),
                 borderRadius: BorderRadius.circular(8),
@@ -668,7 +713,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           ),
         ),
 
-        // Small Search Icon Button
         IconButton(
           tooltip: 'Search products',
           icon: Icon(
@@ -687,7 +731,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           },
         ),
 
-        // Notifications Icon
         Stack(
           clipBehavior: Clip.none,
           children: [
@@ -721,7 +764,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           ],
         ),
 
-        // Profile Avatar
         GestureDetector(
           onTap: () => _showProfileMenu(context, ownerName, storeName, location, category, merchantId),
           child: Container(
@@ -750,7 +792,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- TOGGLED SEARCH BAR ---
   Widget _buildToggledSearchBar() {
     return Container(
       height: 42,
@@ -787,7 +828,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 2. STORE IMAGE CARD ---
   Widget _buildAdjustedStoreImageCard({
     required String merchantId,
     required String storeName,
@@ -917,7 +957,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 3. ACTION BUTTONS ---
   Widget _buildActionButtons(BuildContext context, int pendingOrders) {
     return Row(
       children: [
@@ -990,7 +1029,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 4. CLEAN MINI INVENTORY CONTROL BAR ---
   Widget _buildCleanInventoryControlBar({
     required int totalProducts,
     required List<String> categories,
@@ -1000,7 +1038,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
       physics: const BouncingScrollPhysics(),
       child: Row(
         children: [
-          // Store Inventory Toggle Button
           InkWell(
             onTap: () => setState(() => _isInventoryExpanded = !_isInventoryExpanded),
             borderRadius: BorderRadius.circular(10),
@@ -1042,7 +1079,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           ),
           const SizedBox(width: 8),
 
-          // Small Category Chips
           ...categories.map((cat) {
             final isSelected = _selectedCategory == cat;
             return Padding(
@@ -1076,7 +1112,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 5. PRODUCTS GRID ---
   Widget _buildProductsSquareGrid(List<QueryDocumentSnapshot> products) {
     if (products.isEmpty) {
       return Container(
@@ -1127,7 +1162,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- PRODUCT CARD WITH EDIT & DELETE BUTTONS ---
   Widget _highVisibilityProductCard({
     required String docId,
     required QueryDocumentSnapshot rawDoc,
@@ -1186,16 +1220,16 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
       );
     }
 
-    Color stockBadgeBg = const Color(0xFF15803D); // Dark Green
+    Color stockBadgeBg = const Color(0xFF15803D);
     Color stockBadgeText = Colors.white;
     String stockText = 'Stock: $stockQty';
 
     if (isOutOfStock) {
-      stockBadgeBg = const Color(0xFFDC2626); // Red
+      stockBadgeBg = const Color(0xFFDC2626);
       stockBadgeText = Colors.white;
       stockText = 'Out of Stock';
     } else if (isLowStock) {
-      stockBadgeBg = const Color(0xFFD97706); // Amber/Orange
+      stockBadgeBg = const Color(0xFFD97706);
       stockBadgeText = Colors.white;
       stockText = 'Low: $stockQty left';
     }
@@ -1222,12 +1256,9 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           borderRadius: BorderRadius.circular(12.5),
           child: Stack(
             children: [
-              // 1. PRODUCT BACKGROUND IMAGE (FULL CARD)
               Positioned.fill(
                 child: imageWidget,
               ),
-
-              // 2. BRAND / CATEGORY BADGE ON TOP LEFT
               if (brand.isNotEmpty || category.isNotEmpty)
                 Positioned(
                   top: 6,
@@ -1252,15 +1283,12 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                     ),
                   ),
                 ),
-
-              // 3. EDIT & DELETE BUTTONS ON TOP RIGHT
               Positioned(
                 top: 6,
                 right: 6,
                 child: Row(
                   mainAxisSize: MainAxisSize.min,
                   children: [
-                    // EDIT BUTTON
                     GestureDetector(
                       onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
                       child: Container(
@@ -1278,8 +1306,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                       ),
                     ),
                     const SizedBox(width: 4),
-
-                    // DELETE BUTTON
                     GestureDetector(
                       onTap: () => _deleteProduct(docId, name),
                       child: Container(
@@ -1299,8 +1325,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                   ],
                 ),
               ),
-
-              // 4. DETAILS AT BOTTOM WITH MATCHING GOLD PRODUCT NAME
               Positioned(
                 bottom: 0,
                 left: 0,
@@ -1324,7 +1348,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      // Product Name (Matching Warm Gold)
                       Text(
                         name,
                         maxLines: 1,
@@ -1339,8 +1362,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                         ),
                       ),
                       const SizedBox(height: 2),
-
-                      // Price & Unit
                       Row(
                         crossAxisAlignment: CrossAxisAlignment.baseline,
                         textBaseline: TextBaseline.alphabetic,
@@ -1374,8 +1395,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                         ],
                       ),
                       const SizedBox(height: 3),
-
-                      // Stock Status Pill
                       Container(
                         padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                         decoration: BoxDecoration(
@@ -1407,7 +1426,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- 6. BOTTOM SUMMARY PANEL ---
   Widget _buildBottomSummaryPanel({
     required int totalProducts,
     required int pendingOrders,
@@ -1486,7 +1504,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- PROFILE MENU BOTTOM SHEET ---
   void _showProfileMenu(BuildContext context, String ownerName, String storeName, String location, String category, String merchantId) {
     showModalBottomSheet(
       context: context,
@@ -1572,12 +1589,12 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // --- LOGIC HELPERS ---
+  // FIRESTORE లో ORDERSTATUS కీ ని కూడా చెక్ చేసేలా మార్చడం జరిగింది
   int _countPending(List<QueryDocumentSnapshot> orders) {
     int count = 0;
     for (final doc in orders) {
       final data = doc.data() as Map<String, dynamic>;
-      final status = (data['status'] ?? '').toString().toLowerCase();
+      final status = (data['orderStatus'] ?? data['status'] ?? '').toString().toLowerCase();
       if (status == 'pending' || status == 'placed' || status == 'ordered' || status == 'preparing') {
         count++;
       }
@@ -1589,7 +1606,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     double total = 0.0;
     for (final doc in orders) {
       final data = doc.data() as Map<String, dynamic>;
-      final amount = data['totalAmount'] ?? data['price'];
+      final amount = data['grandTotal'] ?? data['totalAmount'] ?? data['price'];
       if (amount is num) {
         total += amount.toDouble();
       } else if (amount is String) {
