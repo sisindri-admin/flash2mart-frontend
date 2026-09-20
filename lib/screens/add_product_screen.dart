@@ -4,36 +4,50 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
-import '../constants/app_colors.dart';
 
-// Variant Model with Present Stock & Dynamic Addition Calculation
+// Variant Model with Market Price, Flash2Mart Price & Discount Calculation
 class ProductVariantItem {
   final TextEditingController unitController;
-  final TextEditingController priceController;
+  final TextEditingController marketPriceController; // Market Price (MRP)
+  final TextEditingController priceController; // Flash2Mart Price
   final TextEditingController stockController;
   int presentStock;
 
   ProductVariantItem({
     String unit = '1 kg',
+    String marketPrice = '',
     String price = '',
     String stock = '',
     this.presentStock = 0,
   })  : unitController = TextEditingController(text: unit),
+        marketPriceController = TextEditingController(text: marketPrice),
         priceController = TextEditingController(text: price),
         stockController = TextEditingController(text: stock);
 
   int get enteredStock => int.tryParse(stockController.text.trim()) ?? 0;
   int get totalStock => presentStock > 0 ? (presentStock + enteredStock) : enteredStock;
 
+  // Percentage Offer Calculation
+  double get marketPriceVal => double.tryParse(marketPriceController.text.trim()) ?? 0.0;
+  double get flash2martPriceVal => double.tryParse(priceController.text.trim()) ?? 0.0;
+
+  int get discountPercentage {
+    if (marketPriceVal > 0 && flash2martPriceVal > 0 && marketPriceVal > flash2martPriceVal) {
+      double discount = ((marketPriceVal - flash2martPriceVal) / marketPriceVal) * 100;
+      return discount.round();
+    }
+    return 0;
+  }
+
   void dispose() {
     unitController.dispose();
+    marketPriceController.dispose();
     priceController.dispose();
     stockController.dispose();
   }
 }
 
 class AddProductScreen extends StatefulWidget {
-  // ఎడిట్ మోడ్ కోసం పారామీటర్లు
   final String? editDocId;
   final Map<String, dynamic>? editData;
 
@@ -58,16 +72,17 @@ class _AddProductScreenState extends State<AddProductScreen> {
   String? _selectedExistingDocId;
 
   List<ProductVariantItem> _variants = [
-    ProductVariantItem(unit: '1 kg', price: '', stock: '100', presentStock: 0),
+    ProductVariantItem(unit: '1 kg', marketPrice: '', price: '', stock: '100', presentStock: 0),
   ];
 
   List<QueryDocumentSnapshot> _allProducts = [];
   String _topStockFilter = 'All';
   bool _isLoadingProducts = true;
 
-  final ImagePicker _picker = ImagePicker();
   Uint8List? _imageBytes;
   bool _isLoading = false;
+
+  final ImagePicker _picker = ImagePicker();
 
   // Theme Colors
   static const Color primaryBlue = Color(0xFF2563EB);
@@ -84,7 +99,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
   }
 
   void _initEditModeOrFetchAll() {
-    // కార్డ్ నుండి ఎడిట్ మోడ్‌లో ఓపెన్ అయినప్పుడు వివరాలు లోడ్ చేయడం
     if (widget.editDocId != null && widget.editData != null) {
       _selectedExistingDocId = widget.editDocId;
       final data = widget.editData!;
@@ -109,6 +123,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _variants.add(
             ProductVariantItem(
               unit: m['unit'] ?? '1 kg',
+              marketPrice: '${m['marketPrice'] ?? m['price'] ?? ''}',
               price: '${m['price'] ?? ''}',
               stock: '',
               presentStock: existingStock,
@@ -120,6 +135,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         _variants = [
           ProductVariantItem(
             unit: data['unit'] ?? '1 kg',
+            marketPrice: '${data['marketPrice'] ?? data['price'] ?? ''}',
             price: '${data['price'] ?? ''}',
             stock: '',
             presentStock: existingStock,
@@ -186,6 +202,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
           _variants.add(
             ProductVariantItem(
               unit: m['unit'] ?? '1 kg',
+              marketPrice: '${m['marketPrice'] ?? m['price'] ?? ''}',
               price: '${m['price'] ?? ''}',
               stock: '',
               presentStock: existingStock,
@@ -197,6 +214,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         _variants.add(
           ProductVariantItem(
             unit: data['unit'] ?? '1 kg',
+            marketPrice: '${data['marketPrice'] ?? data['price'] ?? ''}',
             price: '${data['price'] ?? ''}',
             stock: '',
             presentStock: existingStock,
@@ -227,14 +245,14 @@ class _AddProductScreenState extends State<AddProductScreen> {
         v.dispose();
       }
       _variants = [
-        ProductVariantItem(unit: '1 kg', price: '', stock: '100', presentStock: 0),
+        ProductVariantItem(unit: '1 kg', marketPrice: '', price: '', stock: '100', presentStock: 0),
       ];
     });
   }
 
   void _addVariant() {
     setState(() {
-      _variants.add(ProductVariantItem(unit: '500 gm', price: '', stock: '50', presentStock: 0));
+      _variants.add(ProductVariantItem(unit: '500 gm', marketPrice: '', price: '', stock: '50', presentStock: 0));
     });
   }
 
@@ -247,31 +265,43 @@ class _AddProductScreenState extends State<AddProductScreen> {
     }
   }
 
+  // --- FIXED IMAGE PICKER LOGIC ---
   Future<void> _pickImage(ImageSource source) async {
     try {
       final XFile? file = await _picker.pickImage(
         source: source,
-        maxWidth: 400,
-        maxHeight: 400,
-        imageQuality: 60,
+        maxWidth: 600,
+        maxHeight: 600,
+        imageQuality: 70,
       );
 
-      if (file == null) return;
-      final bytes = await file.readAsBytes();
-      setState(() => _imageBytes = bytes);
+      if (file != null) {
+        final bytes = await file.readAsBytes();
+        if (mounted) {
+          setState(() {
+            _imageBytes = bytes;
+          });
+          _showMessage('Image selected successfully!');
+        }
+      }
     } catch (e) {
-      _showMessage('Image pick error: $e');
+      debugPrint('IMAGE PICKER ERROR: $e');
+      _showMessage('Unable to access camera or gallery: $e');
     }
   }
 
-  void _showImageSourceBottomSheet() {
+  // --- SHOW BOTTOM SHEET FOR CAMERA / GALLERY SELECTION ---
+  void _onImageUploaderTap() {
+    // Unfocus any active text field to prevent keyboard UI conflicts
+    FocusScope.of(context).unfocus();
+
     showModalBottomSheet(
       context: context,
       backgroundColor: Colors.white,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
       ),
-      builder: (ctx) => SafeArea(
+      builder: (bottomSheetContext) => SafeArea(
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
           child: Column(
@@ -287,17 +317,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
                   ),
                   IconButton(
                     icon: const Icon(Icons.close_rounded, size: 20, color: Colors.grey),
-                    onPressed: () => Navigator.pop(ctx),
+                    onPressed: () => Navigator.pop(bottomSheetContext),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
+              const SizedBox(height: 14),
               Row(
                 children: [
+                  // CAMERA OPTION
                   Expanded(
                     child: InkWell(
-                      onTap: () {
-                        Navigator.pop(ctx);
+                      onTap: () async {
+                        Navigator.pop(bottomSheetContext);
+                        await Future.delayed(const Duration(milliseconds: 200));
                         _pickImage(ImageSource.camera);
                       },
                       borderRadius: BorderRadius.circular(16),
@@ -319,10 +351,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                   ),
                   const SizedBox(width: 14),
+                  // GALLERY OPTION
                   Expanded(
                     child: InkWell(
-                      onTap: () {
-                        Navigator.pop(ctx);
+                      onTap: () async {
+                        Navigator.pop(bottomSheetContext);
+                        await Future.delayed(const Duration(milliseconds: 200));
                         _pickImage(ImageSource.gallery);
                       },
                       borderRadius: BorderRadius.circular(16),
@@ -371,14 +405,19 @@ class _AddProductScreenState extends State<AddProductScreen> {
       }
 
       final List<Map<String, dynamic>> variantDataList = _variants.map((v) {
+        final mPrice = v.marketPriceVal;
+        final fPrice = v.flash2martPriceVal;
         return {
           'unit': v.unitController.text.trim(),
-          'price': double.tryParse(v.priceController.text.trim()) ?? 0.0,
+          'marketPrice': mPrice > 0 ? mPrice : fPrice,
+          'price': fPrice,
+          'discountPercent': v.discountPercentage,
           'stock': v.totalStock,
         };
       }).toList();
 
       final primaryPrice = variantDataList.isNotEmpty ? variantDataList.first['price'] : 0.0;
+      final primaryMarketPrice = variantDataList.isNotEmpty ? variantDataList.first['marketPrice'] : 0.0;
       final primaryUnit = variantDataList.isNotEmpty ? variantDataList.first['unit'] : '';
       final int totalStock = variantDataList.fold<int>(0, (sum, v) => sum + ((v['stock'] as int?) ?? 0));
 
@@ -388,6 +427,7 @@ class _AddProductScreenState extends State<AddProductScreen> {
         'brand': _brandController.text.trim(),
         'category': _categoryController.text.trim(),
         'description': _descriptionController.text.trim(),
+        'marketPrice': primaryMarketPrice,
         'price': primaryPrice,
         'unit': primaryUnit,
         'stock': totalStock,
@@ -397,14 +437,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
       };
 
       if (_selectedExistingDocId != null) {
-        // Firestore లో ప్రొడక్ట్‌ను అప్‌డేట్ చేయడం
         await FirebaseFirestore.instance
             .collection('products')
             .doc(_selectedExistingDocId)
             .update(docData);
         _showMessage('Product updated & saved successfully!');
       } else {
-        // కొత్త ప్రొడక్ట్ యాడ్ చేయడం
         final newDocRef = FirebaseFirestore.instance.collection('products').doc();
         docData['productId'] = newDocRef.id;
         docData['createdAt'] = FieldValue.serverTimestamp();
@@ -480,11 +518,9 @@ class _AddProductScreenState extends State<AddProductScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    // TOP INVENTORY SUGGESTIONS
                     _buildAllStoreStockSelector(),
                     const SizedBox(height: 14),
 
-                    // CARD 1: PRODUCT & BRAND DETAILS
                     _buildFormCard(
                       title: isEditMode ? 'Product Details (Editing)' : 'Product & Brand Details',
                       icon: Icons.inventory_2_outlined,
@@ -501,7 +537,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           ),
                           const SizedBox(height: 14),
 
-                          // Brand Field
                           _buildTextField(
                             controller: _brandController,
                             label: 'Brand Name',
@@ -510,7 +545,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                           ),
                           const SizedBox(height: 8),
 
-                          // Brand quick chips
                           const Text(
                             'Quick Brands:',
                             style: TextStyle(fontSize: 11.5, fontWeight: FontWeight.bold, color: Color(0xFF64748B)),
@@ -557,7 +591,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // CARD 2: QUANTITY, PRICING & STOCK
                     _buildFormCard(
                       title: 'Quantities, Prices & Stock',
                       icon: Icons.layers_outlined,
@@ -602,12 +635,11 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                       ],
                                     ),
                                     const SizedBox(height: 8),
+
                                     Row(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        // Qty / Unit
                                         Expanded(
-                                          flex: 4,
+                                          flex: 5,
                                           child: _buildTextField(
                                             controller: variant.unitController,
                                             label: 'Qty/Unit',
@@ -618,23 +650,64 @@ class _AddProductScreenState extends State<AddProductScreen> {
                                         ),
                                         const SizedBox(width: 8),
 
-                                        // Price
                                         Expanded(
-                                          flex: 4,
+                                          flex: 5,
                                           child: _buildTextField(
-                                            controller: variant.priceController,
-                                            label: 'Price (₹)',
-                                            hint: '50',
-                                            icon: Icons.currency_rupee_rounded,
+                                            controller: variant.marketPriceController,
+                                            label: 'Market Price (₹)',
+                                            hint: 'MRP e.g. 100',
+                                            icon: Icons.money_off_rounded,
                                             keyboardType: TextInputType.number,
-                                            validator: (val) => val == null || val.trim().isEmpty ? 'Enter price' : null,
+                                            onChanged: (_) => setState(() {}),
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 8),
+
+                                    Row(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Expanded(
+                                          flex: 5,
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.start,
+                                            children: [
+                                              _buildTextField(
+                                                controller: variant.priceController,
+                                                label: 'Flash2Mart Price (₹)',
+                                                hint: 'Selling e.g. 80',
+                                                icon: Icons.currency_rupee_rounded,
+                                                keyboardType: TextInputType.number,
+                                                onChanged: (_) => setState(() {}),
+                                                validator: (val) => val == null || val.trim().isEmpty ? 'Enter selling price' : null,
+                                              ),
+                                              const SizedBox(height: 4),
+
+                                              if (variant.discountPercentage > 0)
+                                                Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2.5),
+                                                  decoration: BoxDecoration(
+                                                    color: const Color(0xFFDCFCE7),
+                                                    borderRadius: BorderRadius.circular(6),
+                                                    border: Border.all(color: const Color(0xFF86EFAC), width: 0.8),
+                                                  ),
+                                                  child: Text(
+                                                    '${variant.discountPercentage}% OFF Offer!',
+                                                    style: const TextStyle(
+                                                      fontSize: 10,
+                                                      fontWeight: FontWeight.bold,
+                                                      color: Color(0xFF15803D),
+                                                    ),
+                                                  ),
+                                                ),
+                                            ],
                                           ),
                                         ),
                                         const SizedBox(width: 8),
 
-                                        // Stock Box + Live Addition Badge
                                         Expanded(
-                                          flex: 4,
+                                          flex: 5,
                                           child: Column(
                                             crossAxisAlignment: CrossAxisAlignment.start,
                                             children: [
@@ -709,7 +782,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 16),
 
-                    // CARD 3: DESCRIPTION
                     _buildFormCard(
                       title: 'Description (Optional)',
                       icon: Icons.description_outlined,
@@ -723,13 +795,12 @@ class _AddProductScreenState extends State<AddProductScreen> {
                     ),
                     const SizedBox(height: 20),
 
-                    // 4. SQUARE IMAGE UPLOADER
+                    // SQUARE IMAGE UPLOADER
                     Center(
                       child: _buildSquareImageUploader(),
                     ),
                     const SizedBox(height: 24),
 
-                    // 5. SAVE / UPDATE BUTTON
                     SizedBox(
                       width: double.infinity,
                       height: 52,
@@ -765,7 +836,6 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // --- ALL STORE STOCKS SELECTOR ---
   Widget _buildAllStoreStockSelector() {
     if (_isLoadingProducts) {
       return const SizedBox(
@@ -988,91 +1058,94 @@ class _AddProductScreenState extends State<AddProductScreen> {
     );
   }
 
-  // Square Image Box
   Widget _buildSquareImageUploader() {
     return Column(
       children: [
-        GestureDetector(
-          onTap: _showImageSourceBottomSheet,
-          child: Container(
-            width: 140,
-            height: 140,
-            decoration: BoxDecoration(
-              color: Colors.white,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(
-                color: _imageBytes != null ? primaryBlue : const Color(0xFFCBD5E1),
-                width: 1.5,
+        Material(
+          color: Colors.transparent,
+          child: InkWell(
+            onTap: _onImageUploaderTap,
+            borderRadius: BorderRadius.circular(20),
+            child: Container(
+              width: 140,
+              height: 140,
+              decoration: BoxDecoration(
+                color: Colors.white,
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(
+                  color: _imageBytes != null ? primaryBlue : const Color(0xFFCBD5E1),
+                  width: 1.5,
+                ),
+                boxShadow: [
+                  BoxShadow(
+                    color: Colors.black.withOpacity(0.04),
+                    blurRadius: 10,
+                    offset: const Offset(0, 4),
+                  ),
+                ],
               ),
-              boxShadow: [
-                BoxShadow(
-                  color: Colors.black.withOpacity(0.04),
-                  blurRadius: 10,
-                  offset: const Offset(0, 4),
-                ),
-              ],
-            ),
-            child: Stack(
-              children: [
-                if (_imageBytes != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(18),
-                    child: Image.memory(
-                      _imageBytes!,
-                      width: 140,
-                      height: 140,
-                      fit: BoxFit.cover,
+              child: Stack(
+                children: [
+                  if (_imageBytes != null)
+                    ClipRRect(
+                      borderRadius: BorderRadius.circular(18),
+                      child: Image.memory(
+                        _imageBytes!,
+                        width: 140,
+                        height: 140,
+                        fit: BoxFit.cover,
+                      ),
+                    )
+                  else
+                    Center(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.all(8),
+                            decoration: const BoxDecoration(
+                              color: Color(0xFFEEF2FF),
+                              shape: BoxShape.circle,
+                            ),
+                            child: const Icon(Icons.add_rounded, color: primaryBlue, size: 26),
+                          ),
+                          const SizedBox(height: 6),
+                          const Text(
+                            '+ Add Product\nImage',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: textDark,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 2),
+                          const Text(
+                            'Image Upload',
+                            style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
+                          ),
+                        ],
+                      ),
                     ),
-                  )
-                else
-                  Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Container(
-                          padding: const EdgeInsets.all(8),
-                          decoration: const BoxDecoration(
-                            color: Color(0xFFEEF2FF),
-                            shape: BoxShape.circle,
-                          ),
-                          child: const Icon(Icons.add_rounded, color: primaryBlue, size: 26),
-                        ),
-                        const SizedBox(height: 6),
-                        const Text(
-                          '+ Add Product\nImage',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(
-                            fontSize: 12,
-                            fontWeight: FontWeight.bold,
-                            color: textDark,
-                            height: 1.2,
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        const Text(
-                          'Image Upload',
-                          style: TextStyle(fontSize: 10, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
-                        ),
-                      ],
+                  Positioned(
+                    top: 8,
+                    right: 8,
+                    child: Container(
+                      padding: const EdgeInsets.all(6),
+                      decoration: BoxDecoration(
+                        color: _imageBytes != null ? Colors.black.withOpacity(0.65) : primaryPurple,
+                        shape: BoxShape.circle,
+                      ),
+                      child: const Icon(
+                        Icons.camera_alt_rounded,
+                        size: 14,
+                        color: Colors.white,
+                      ),
                     ),
                   ),
-                Positioned(
-                  top: 8,
-                  right: 8,
-                  child: Container(
-                    padding: const EdgeInsets.all(6),
-                    decoration: BoxDecoration(
-                      color: _imageBytes != null ? Colors.black.withOpacity(0.65) : primaryPurple,
-                      shape: BoxShape.circle,
-                    ),
-                    child: const Icon(
-                      Icons.camera_alt_rounded,
-                      size: 14,
-                      color: Colors.white,
-                    ),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
