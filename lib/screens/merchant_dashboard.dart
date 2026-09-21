@@ -8,6 +8,7 @@ import 'package:image_picker/image_picker.dart';
 
 import '../constants/app_colors.dart';
 import '../services/location_service.dart';
+import '../services/permission_service.dart'; // OverlayPermissionHandler కోసం యాడ్ చేయబడింది
 import '../widgets/new_order_popup_sheet.dart';
 import 'add_product_screen.dart';
 import 'orders_screen.dart';
@@ -44,6 +45,11 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   void initState() {
     super.initState();
     _listenForNewOrders();
+
+    // 🚀 Display over other apps పర్మిషన్‌ను డ్యాష్‌బోర్డ్ లోడ్ అవ్వగానే అడుగుతుంది
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      OverlayPermissionHandler.checkAndRequestOverlayPermission(context);
+    });
   }
 
   @override
@@ -53,7 +59,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     super.dispose();
   }
 
-  // --- REALTIME NEW ORDERS LISTENER (FIXED FOR EXACT FIRESTORE KEYS) ---
+  // --- REALTIME NEW ORDERS LISTENER ---
   void _listenForNewOrders() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -68,7 +74,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           final orderData = change.doc.data() as Map<String, dynamic>?;
           if (orderData == null) continue;
 
-          // orderStatus మరియు status రెండింటినీ తనిఖీ చేస్తుంది
           final String rawStatus = (orderData['orderStatus'] ?? orderData['status'] ?? '').toString();
           final String status = rawStatus.trim().toLowerCase();
 
@@ -106,7 +111,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     });
   }
 
-  // --- LOCATION BOTTOM SHEET (LIVE GPS + MANUAL ADDRESS INPUT) ---
+  // --- LOCATION BOTTOM SHEET ---
   void _showLocationEditBottomSheet(BuildContext context, String merchantId, String currentSavedLocation) {
     final TextEditingController manualLocationController = TextEditingController();
     String liveDetectedAddress = currentSavedLocation;
@@ -1542,6 +1547,20 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ],
               ),
               const Divider(height: 22, color: Color(0xFFF1F5F9)),
+
+              // 🚀 ప్రొఫైల్ మెనూలో కూడా అలర్ట్ విండో పర్మిషన్ చెక్ చేసుకునే ఆప్షన్ చేర్చబడింది
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: const Icon(Icons.layers_rounded, color: primaryBlue),
+                title: const Text('Display Over Other Apps Permission', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
+                subtitle: const Text('బ్యాక్‌గ్రౌండ్‌లో నోటిఫికేషన్లు పొందడానికి ఎనేబుల్ చేయండి', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                trailing: const Icon(Icons.chevron_right_rounded, color: primaryBlue),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  OverlayPermissionHandler.checkAndRequestOverlayPermission(context);
+                },
+              ),
+
               ListTile(
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.my_location_rounded, color: Colors.redAccent),
@@ -1589,7 +1608,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     );
   }
 
-  // FIRESTORE లో ORDERSTATUS కీ ని కూడా చెక్ చేసేలా మార్చడం జరిగింది
   int _countPending(List<QueryDocumentSnapshot> orders) {
     int count = 0;
     for (final doc in orders) {
