@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_auth/firebase_auth.dart';
 
 import 'constants/app_colors.dart';
 import 'firebase_options.dart';
@@ -36,10 +37,31 @@ class Flash2MartApp extends StatelessWidget {
           secondary: AppColors.secondary,
         ),
       ),
-      home: const SplashScreen(),
+      // 🚀 StreamBuilder ద్వారా ఆటో-లాగిన్ (Persistent Auth Check)
+      home: StreamBuilder<User?>(
+        stream: FirebaseAuth.instance.authStateChanges(),
+        builder: (context, snapshot) {
+          // Firebase ఆథెంటికేషన్ చెక్ చేసేంతవరకు లోడింగ్ స్క్రీన్
+          if (snapshot.connectionState == ConnectionState.waiting) {
+            return const Scaffold(
+              body: Center(
+                child: CircularProgressIndicator(color: AppColors.primary),
+              ),
+            );
+          }
+
+          // యూజర్ ఆల్రెడీ లాగిన్ అయి ఉంటే డైరెక్ట్‌గా MerchantDashboard కి వెళ్తుంది
+          if (snapshot.hasData && snapshot.data != null) {
+            return const MerchantDashboard();
+          }
+
+          // యూజర్ లాగిన్ అవ్వకపోతే మాత్రమే లాగిన్/సాఫ్ట్‌వేర్ ఆత్ స్క్రీన్‌కి పంపుతుంది
+          return const MerchantAuthScreen();
+        },
+      ),
       routes: {
         '/auth': (context) => const MerchantAuthScreen(),
-        '/dashboard': (context) => MerchantDashboard(),
+        '/dashboard': (context) => const MerchantDashboard(),
       },
     );
   }
