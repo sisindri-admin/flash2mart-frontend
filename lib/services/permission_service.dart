@@ -1,7 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
-import 'package:auto_start_flutter/auto_start_flutter.dart';
 
 class OverlayPermissionHandler {
   static Future<void> checkAndRequestOverlayPermission(BuildContext context) async {
@@ -24,11 +23,11 @@ class OverlayPermissionHandler {
                   children: [
                     Icon(Icons.layers_rounded, color: Color(0xFF2563EB)),
                     SizedBox(width: 10),
-                    Text('Display Permission Required', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                    Text('Display Permission', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
                   ],
                 ),
                 content: const Text(
-                  'మీరు వేరే యాప్స్ ఉపయోగిస్తున్నప్పుడు కొత్త ఆర్డర్లు రాగానే తక్షణమే పాప్-అప్ రావడానికి "Display Over Other Apps" పర్మిషన్ అనుమతించండి.',
+                  'వేరే యాప్స్ ఉపయోగిస్తున్నప్పుడు కొత్త ఆర్డర్లు రాగానే తక్షణమే పాప్-అప్ రావడానికి "Display Over Other Apps" పర్మిషన్ అనుమతించండి.',
                   style: TextStyle(fontSize: 13, height: 1.4),
                 ),
                 actions: [
@@ -54,7 +53,7 @@ class OverlayPermissionHandler {
         }
       }
 
-      // 2. Battery Optimization Disable Request (డైరెక్ట్ సిస్టమ్ పర్మిషన్ పాప్-అప్)
+      // 2. Battery Optimization Disable Request
       PermissionStatus batteryStatus = await Permission.ignoreBatteryOptimizations.status;
       if (!batteryStatus.isGranted) {
         if (context.mounted) {
@@ -67,7 +66,7 @@ class OverlayPermissionHandler {
     }
   }
 
-  // Battery Optimization మ్యాన్యువల్ లేకుండా సింపుల్ డయలాగ్
+  // Battery Optimization Dialog (Single Click System Request)
   static void _showBatteryOptimizationDialog(BuildContext context) {
     showDialog(
       context: context,
@@ -83,7 +82,7 @@ class OverlayPermissionHandler {
             ],
           ),
           content: const Text(
-            'యాప్ మినిమైజ్ చేసినప్పుడు కూడా ఆర్డర్‌లు మిస్ కాకుండా ఉండటానికి "Unrestricted Battery / Don\'t Optimize" బటన్ నొక్కండి.',
+            'యాప్ మినిమైజ్ చేసినప్పుడు కూడా ఆర్డర్‌లు మిస్ కాకుండా ఉండటానికి "Don\'t Optimize / Allow" బటన్ నొక్కండి.',
             style: TextStyle(fontSize: 13, height: 1.4),
           ),
           actions: [
@@ -98,7 +97,6 @@ class OverlayPermissionHandler {
               ),
               onPressed: () async {
                 Navigator.pop(context);
-                // 🚀 ఒకే ట్యాప్‌తో ఆండ్రాయిడ్ బ్యాటరీ ఆప్టిమైజేషన్ పాప్-అప్ ఓపెన్ అవుతుంది
                 await Permission.ignoreBatteryOptimizations.request();
               },
               child: const Text('ALLOW NOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
@@ -109,18 +107,8 @@ class OverlayPermissionHandler {
     );
   }
 
-  // Auto-Start Settings కి ఒకే క్లిక్‌తో వెళ్ళే హెల్పర్ ఫంక్షన్ (Xiaomi, Vivo, Oppo మొదలైన వాటికి)
+  // Auto-Start / App Settings కి సులభంగా వెళ్లే ఫంక్షన్
   static Future<void> openAutoStartSettings(BuildContext context) async {
-    try {
-      bool isAvailable = await isAutoStartAvailable ?? false;
-      if (isAvailable) {
-        await getAutoStartPermission();
-      } else {
-        // Auto-start లేని ఫోన్‌లకు డైరెక్ట్‌గా ఆప్టిమైజేషన్ పేజీకి తీసుకెళ్తుంది
-        await openAppSettings();
-      }
-    } catch (e) {
-      await openAppSettings();
-    }
+    await openAppSettings();
   }
 }
