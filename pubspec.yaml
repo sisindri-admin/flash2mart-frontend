@@ -46,6 +46,8 @@ dependencies:
   audioplayers: ^6.1.0
   flutter_local_notifications: ^17.0.0
   permission_handler: ^11.3.1
+  flutter_foreground_task: ^8.0.0
+  auto_start_flutter: ^0.1.1
 
 dev_dependencies:
   flutter_test:
