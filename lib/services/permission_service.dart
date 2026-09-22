@@ -39,13 +39,8 @@ class OverlayPermissionHandler {
         channelId: 'flash2mart_merchant_orders',
         channelName: 'Flash2Mart Merchant Service',
         channelDescription: 'Keeps store online for new real-time orders',
-        channelImportance: NotificationImportance.HIGH,
+        channelImportance: NotificationChannelImportance.HIGH,
         priority: NotificationPriority.HIGH,
-        iconData: const NotificationIconData(
-          resType: ResourceType.mipmap,
-          resPrefix: ResourcePrefix.ic,
-          name: 'launcher',
-        ),
       ),
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
@@ -56,6 +51,7 @@ class OverlayPermissionHandler {
     );
 
     await FlutterForegroundTask.startService(
+      serviceId: 256,
       notificationTitle: 'Flash2Mart Store Active',
       notificationText: 'కొత్త ఆర్డర్ల కోసం యాప్ బ్యాక్‌గ్రౌండ్‌లో రన్ అవుతోంది...',
     );
