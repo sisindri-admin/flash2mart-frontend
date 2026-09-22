@@ -2,11 +2,37 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class OverlayPermissionHandler {
-  // 🚀 బ్యాక్‌గ్రౌండ్ లో Firestore నిరంతరం రన్ అవ్వడానికి Foreground Task ని ప్రారంభించే మెథడ్
+  // 🚀 Swiggy లాగా ఆటోమేటిక్‌గా Notification Channel క్రియేట్ చేసి Allow చేసే మెథడ్
+  static Future<void> setupNotificationChannel() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+    const AndroidNotificationChannel channel = AndroidNotificationChannel(
+      'flash2mart_merchant_orders', // Channel ID
+      'New Order Alerts', // Channel Name (సెట్టింగ్స్‌లో కనిపించే పేరు)
+      description: 'Notifications for new incoming store orders',
+      importance: Importance.max,
+      playSound: true,
+      enableVibration: true,
+    );
+
+    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
+        FlutterLocalNotificationsPlugin();
+
+    await flutterLocalNotificationsPlugin
+        .resolvePlatformSpecificImplementation<
+            AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(channel);
+  }
+
+  // 🚀 బ్యాక్‌గ్రౌండ్‌లో Firestore నిరంతరం రన్ అవ్వడానికి Foreground Task ప్రారంభించే మెథడ్
   static Future<void> startOrderForegroundService() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+
+    // ఫస్ట్ ఛానెల్ సృష్టించడం
+    await setupNotificationChannel();
 
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
@@ -35,7 +61,7 @@ class OverlayPermissionHandler {
     );
   }
 
-  // 'Display Over Other Apps' & Battery Optimization permissions అడిగే మెథడ్
+  // 'Display Over Other Apps', Battery Optimization & Notification permissions అడిగే మెథడ్
   static Future<void> checkAndRequestOverlayPermission(BuildContext context) async {
     if (kIsWeb) return;
     if (defaultTargetPlatform != TargetPlatform.android) return;
@@ -97,7 +123,7 @@ class OverlayPermissionHandler {
         await Permission.notification.request();
       }
 
-      // 4. Start Foreground Task
+      // 4. Start Foreground Task & Notification Channel Setup
       await startOrderForegroundService();
 
     } catch (e) {

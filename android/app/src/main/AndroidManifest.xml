@@ -24,6 +24,11 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
+        <!-- 🚀 Swiggy లాగా ఛానెల్‌ని ఆటోమేటిక్‌గా Allow చేయడానికి ఇది అత్యవసరం -->
+        <meta-data
+            android:name="com.google.firebase.messaging.default_notification_channel_id"
+            android:value="flash2mart_merchant_orders" />
+
         <activity
             android:name=".MainActivity"
             android:exported="true"
@@ -44,7 +49,7 @@
             </intent-filter>
         </activity>
 
-        <!-- 🚀 IMPORTANT: Background Service Declaration for App Minimization -->
+        <!-- Background Service Declaration for App Minimization -->
         <service 
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="dataSync"
