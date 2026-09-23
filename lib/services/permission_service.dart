@@ -15,11 +15,12 @@ class OverlayPermissionHandler {
       'New Order Alerts',
       channelDescription: 'Notifications for new incoming store orders',
       importance: Importance.max,
-      priority: Priority.high,
+      priority: Priority.max, // 👈 Max Priority
       fullScreenIntent: true, // 👈 ఫోన్ స్క్రీన్ లాక్/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ తక్షణమే రావడానికి
       playSound: true,
       enableVibration: true,
-      category: AndroidNotificationCategory.call,
+      audioAttributesUsage: AudioAttributesUsage.alarm, // 👈 ఫోన్ సైలెంట్‌లో ఉన్నా రింగ్‌టోన్ ప్లే అవ్వడానికి
+      category: AndroidNotificationCategory.alarm,
     );
 
     const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
