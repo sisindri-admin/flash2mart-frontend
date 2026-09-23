@@ -14,12 +14,12 @@ class SummaryPanelWidget extends StatelessWidget {
     required this.totalRevenue,
   });
 
+  static const Color primaryBlue = Color(0xFF2563EB);
+  static const Color primaryPurple = Color(0xFF4F46E5);
+  static const Color textDark = Color(0xFF1E293B);
+
   @override
   Widget build(BuildContext context) {
-    const Color primaryBlue = Color(0xFF2563EB);
-    const Color primaryPurple = Color(0xFF4F46E5);
-    const Color textDark = Color(0xFF1E293B);
-
     return Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -66,7 +66,6 @@ class SummaryPanelWidget extends StatelessWidget {
   }
 
   Widget _buildBottomStatItem(String label, String value, IconData icon, Color color) {
-    const Color textDark = Color(0xFF1E293B);
     return Expanded(
       child: Column(
         children: [

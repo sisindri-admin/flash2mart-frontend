@@ -25,10 +25,10 @@
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         
-        <!-- 🚀 Swiggy లాగా ఛానెల్‌ని ఆటోమేటిక్‌గా Allow చేయడానికి ఇది అత్యవసరం -->
+        <!-- 🚨 డిఫాల్ట్ నోటిఫికేషన్ ఛానెల్ ఐడీ (మిగతా అన్ని ఫైల్స్‌లోని 'new_orders' ఐడీతో మ్యాచ్ అవ్వాలి) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="flash2mart_merchant_orders" />
+            android:value="new_orders" />
 
         <activity
             android:name=".MainActivity"
@@ -49,6 +49,12 @@
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
+            </intent-filter>
+
+            <!-- 🚀 నోటిఫికేషన్ టాప్ క్లిక్ ఐడెంటిఫైయర్ -->
+            <intent-filter>
+                <action android:name="FLUTTER_NOTIFICATION_CLICK" />
+                <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
 

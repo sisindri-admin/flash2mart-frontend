@@ -8,16 +8,21 @@ class OverlayPermissionHandler {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
+  // 🚨 ఈ Channel ID మిగతా అన్ని ఫైల్స్‌లో వాడే ఐడీతో ఖచ్చితంగా మ్యాచ్ అవ్వాలి!
+  static const String channelId = 'new_orders';
+  static const String channelName = 'New Order Alerts';
+
   // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే రింగ్‌టోన్‌తో సహా పైన పాప్-అప్ పంపే మెథడ్
   static Future<void> triggerOrderSoundNotification(String orderId, String customerName) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      'flash2mart_merchant_orders',
-      'New Order Alerts',
-      channelDescription: 'Notifications for new incoming store orders',
+      channelId, // 👈 Corrected Channel ID
+      channelName,
+      channelDescription: 'High priority alerts for incoming merchant orders',
       importance: Importance.max,
       priority: Priority.max, // 👈 Max Priority
-      fullScreenIntent: true, // 👈 ఫోన్ స్క్రీన్ లాక్/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ తక్షణమే రావడానికి
+      fullScreenIntent: true, // 👈 ఫోన్ లాక్‌లో/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ రావడానికి
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('order_ringtone'), // 👈 ringtone
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm, // 👈 ఫోన్ సైలెంట్‌లో ఉన్నా రింగ్‌టోన్ ప్లే అవ్వడానికి
       category: AndroidNotificationCategory.alarm,
@@ -38,11 +43,12 @@ class OverlayPermissionHandler {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      'flash2mart_merchant_orders', // Channel ID
-      'New Order Alerts', // Channel Name
-      description: 'Notifications for new incoming store orders',
+      channelId, // 👈 Corrected Channel ID
+      channelName,
+      description: 'High priority alerts for incoming merchant orders',
       importance: Importance.max,
       playSound: true,
+      sound: RawResourceAndroidNotificationSound('order_ringtone'),
       enableVibration: true,
     );
 
@@ -52,7 +58,7 @@ class OverlayPermissionHandler {
         ?.createNotificationChannel(channel);
   }
 
-  // 🚀 బ్యాక్‌గ్రౌండ్‌లో Firestore నిరంతరం రన్ అవ్వడానికి Foreground Task ప్రారంభించే మెథడ్
+  // 🚀 బ్యాక్‌గ్రౌండ్‌లో నిరంతరం రన్ అవ్వడానికి Foreground Task ప్రారంభించే మెథడ్
   static Future<void> startOrderForegroundService() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
@@ -61,7 +67,7 @@ class OverlayPermissionHandler {
 
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: 'flash2mart_merchant_orders',
+        channelId: channelId, // 👈 Corrected Channel ID
         channelName: 'Flash2Mart Merchant Service',
         channelDescription: 'Keeps store online for new real-time orders',
         channelImportance: NotificationChannelImportance.HIGH,

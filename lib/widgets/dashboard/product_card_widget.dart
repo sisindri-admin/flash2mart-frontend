@@ -14,8 +14,8 @@ class ProductCardWidget extends StatelessWidget {
   final String category;
   final String imageBase64;
   final String imageUrl;
-  final Function(String, Map<String, dynamic>) onEdit;
-  final Function(String, String) onDelete;
+  final Function(String docId, Map<String, dynamic> data) onEdit;
+  final Function(String docId, String name) onDelete;
 
   const ProductCardWidget({
     super.key,
@@ -34,11 +34,11 @@ class ProductCardWidget extends StatelessWidget {
     required this.onDelete,
   });
 
+  static const Color cardGreenBorder = Color(0xFF16A34A);
+  static const Color productNameGold = Color(0xFFFDE047);
+
   @override
   Widget build(BuildContext context) {
-    const Color cardGreenBorder = Color(0xFF16A34A);
-    const Color productNameGold = Color(0xFFFDE047);
-
     final int stockQty = stock is int ? stock : int.tryParse('$stock') ?? 0;
     final bool isOutOfStock = stockQty <= 0;
     final bool isLowStock = stockQty > 0 && stockQty < 100;

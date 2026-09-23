@@ -1,15 +1,16 @@
 import 'dart:async';
 import 'dart:convert';
-import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 
-import '../constants/app_colors.dart';
-import '../services/location_service.dart';
 import '../services/permission_service.dart';
 import '../widgets/new_order_popup_sheet.dart';
+import '../widgets/store_location_sheet.dart';
+import '../widgets/dashboard/product_card_widget.dart';
+import '../widgets/dashboard/summary_panel_widget.dart';
 import 'add_product_screen.dart';
 import 'orders_screen.dart';
 
@@ -37,7 +38,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   static const Color primaryBlue = Color(0xFF2563EB);
   static const Color primaryPurple = Color(0xFF4F46E5);
   static const Color cardGreenBorder = Color(0xFF16A34A);
-  static const Color productNameGold = Color(0xFFFDE047);
   static const Color bgGrey = Color(0xFFF8FAFC);
   static const Color textDark = Color(0xFF1E293B);
 
@@ -45,11 +45,34 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
   void initState() {
     super.initState();
     _listenForNewOrders();
+    _saveMerchantFcmToken();
 
     // Foreground Task & Notification Permission check
     WidgetsBinding.instance.addPostFrameCallback((_) {
       OverlayPermissionHandler.checkAndRequestOverlayPermission(context);
     });
+  }
+
+  // 🚀 FCM Device Token saved to Firestore
+  Future<void> _saveMerchantFcmToken() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null) return;
+
+      String? token = await FirebaseMessaging.instance.getToken();
+      if (token != null) {
+        await FirebaseFirestore.instance
+            .collection('merchants')
+            .doc(user.uid)
+            .set({
+          'fcmToken': token,
+          'lastTokenUpdate': FieldValue.serverTimestamp(),
+        }, SetOptions(merge: true));
+        debugPrint("FCM Token saved successfully: $token");
+      }
+    } catch (e) {
+      debugPrint("Error saving FCM Token: $e");
+    }
   }
 
   @override
@@ -79,13 +102,13 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
 
           if ((status == 'pending' || status == 'placed' || status == 'ordered') && !_isPopupShowing) {
             
-            // 🚀 1. Trigger Full Screen Notification & Sound for Background State
+            // 🚀 Trigger Notification & Ringtone sound with High Priority
             OverlayPermissionHandler.triggerOrderSoundNotification(
               change.doc.id,
               orderData['customerName'] ?? orderData['userName'] ?? 'Customer',
             );
 
-            // 🚀 2. Show Modal Sheet inside App UI
+            // Show Modal Sheet inside App UI if foreground
             _showNewOrderBottomSheet(change.doc.id, orderData);
           }
         }
@@ -121,10 +144,6 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
 
   // --- LOCATION BOTTOM SHEET ---
   void _showLocationEditBottomSheet(BuildContext context, String merchantId, String currentSavedLocation) {
-    final TextEditingController manualLocationController = TextEditingController();
-    String liveDetectedAddress = currentSavedLocation;
-    bool isDetecting = false;
-
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -132,204 +151,9 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
       ),
-      builder: (ctx) => StatefulBuilder(
-        builder: (context, setModalState) {
-          return Padding(
-            padding: EdgeInsets.only(
-              left: 20,
-              right: 20,
-              top: 20,
-              bottom: MediaQuery.of(context).viewInsets.bottom + 20,
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Row(
-                      children: [
-                        Icon(Icons.location_on_rounded, color: Colors.redAccent, size: 22),
-                        SizedBox(width: 8),
-                        Text(
-                          'Set Shop Location',
-                          style: TextStyle(fontSize: 17, fontWeight: FontWeight.w800, color: textDark),
-                        ),
-                      ],
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close_rounded, size: 20, color: Colors.grey),
-                      onPressed: () => Navigator.pop(ctx),
-                    ),
-                  ],
-                ),
-                const Text(
-                  'Live GPS address leda manual address set cheskondi:',
-                  style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 16),
-
-                const Text(
-                  '1. Live GPS Location (Auto-Detected)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: primaryBlue),
-                ),
-                const SizedBox(height: 6),
-                Container(
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFEFF6FF),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: const Color(0xFFBFDBFE)),
-                  ),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      const Icon(Icons.my_location_rounded, color: primaryBlue, size: 18),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              liveDetectedAddress.isNotEmpty ? liveDetectedAddress : 'Detecting GPS...',
-                              style: const TextStyle(
-                                fontSize: 12.5,
-                                fontWeight: FontWeight.w600,
-                                color: textDark,
-                              ),
-                            ),
-                            const SizedBox(height: 3),
-                            const Text(
-                              'Google Maps live address',
-                              style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
-                            ),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      InkWell(
-                        onTap: isDetecting
-                            ? null
-                            : () async {
-                                setModalState(() => isDetecting = true);
-                                final res = await LocationService.instance.getCurrentLiveLocation();
-                                if (res.success) {
-                                  setModalState(() {
-                                    liveDetectedAddress = res.address;
-                                    isDetecting = false;
-                                  });
-                                } else {
-                                  setModalState(() => isDetecting = false);
-                                  _showSnackBar(res.errorMessage ?? 'GPS Error', Colors.redAccent);
-                                }
-                              },
-                        child: Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 5),
-                          decoration: BoxDecoration(
-                            color: Colors.white,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: const Color(0xFF93C5FD)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              if (isDetecting)
-                                const SizedBox(width: 10, height: 10, child: CircularProgressIndicator(strokeWidth: 1.5))
-                              else
-                                const Icon(Icons.refresh_rounded, size: 12, color: primaryBlue),
-                              const SizedBox(width: 3),
-                              const Text('Re-Detect', style: TextStyle(fontSize: 10.5, fontWeight: FontWeight.bold, color: primaryBlue)),
-                            ],
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 16),
-
-                const Text(
-                  '2. Manual Custom Address (Optional)',
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
-                ),
-                const SizedBox(height: 6),
-                TextField(
-                  controller: manualLocationController,
-                  maxLines: 2,
-                  style: const TextStyle(fontSize: 13, color: textDark),
-                  decoration: InputDecoration(
-                    hintText: 'Eg: Shop No. 5, Opp. RTC Bus Stand, Trunk Road, Nellore',
-                    hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
-                    prefixIcon: const Icon(Icons.edit_location_alt_outlined, color: primaryPurple, size: 20),
-                    filled: true,
-                    fillColor: const Color(0xFFF8FAFC),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                    enabledBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: Color(0xFFE2E8F0)),
-                    ),
-                    focusedBorder: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(14),
-                      borderSide: const BorderSide(color: primaryBlue, width: 1.5),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 6),
-                const Text(
-                  'Manual address enter cheste adhi save avtundi, lekapothe live GPS address save avtundi.',
-                  style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
-                ),
-                const SizedBox(height: 20),
-
-                SizedBox(
-                  width: double.infinity,
-                  height: 48,
-                  child: ElevatedButton(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: primaryBlue,
-                      foregroundColor: Colors.white,
-                      elevation: 2,
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
-                    ),
-                    onPressed: () async {
-                      final manualText = manualLocationController.text.trim();
-                      final finalLocation = manualText.isNotEmpty ? manualText : liveDetectedAddress;
-
-                      await FirebaseFirestore.instance.collection('merchants').doc(merchantId).set({
-                        'location': finalLocation,
-                        'isManualLocation': manualText.isNotEmpty,
-                        'lastLocationUpdate': FieldValue.serverTimestamp(),
-                      }, SetOptions(merge: true));
-
-                      if (mounted) {
-                        Navigator.pop(ctx);
-                        _showSnackBar(
-                          manualText.isNotEmpty
-                              ? 'Manual address saved: $finalLocation'
-                              : 'Live GPS address saved: $finalLocation',
-                          Colors.teal,
-                        );
-                      }
-                    },
-                    child: const Row(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(Icons.check_circle_outline_rounded, size: 18),
-                        SizedBox(width: 6),
-                        Text('Save Location', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15)),
-                      ],
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          );
-        },
+      builder: (ctx) => StoreLocationSheet(
+        merchantId: merchantId,
+        currentSavedLocation: currentSavedLocation,
       ),
     );
   }
@@ -426,10 +250,10 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
       await FirebaseFirestore.instance
           .collection('merchants')
           .doc(merchantId)
-          .update({
+          .set({
         'isOnline': !currentStatus,
         'lastActive': FieldValue.serverTimestamp(),
-      });
+      }, SetOptions(merge: true));
     } catch (e) {
       _showSnackBar('Failed to update status: $e', Colors.redAccent);
     }
@@ -581,7 +405,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                             const SizedBox.shrink(),
                           const SizedBox(height: 18),
 
-                          _buildBottomSummaryPanel(
+                          SummaryPanelWidget(
                             totalProducts: totalProducts,
                             pendingOrders: pendingOrders,
                             totalOrders: totalOrders,
@@ -1158,7 +982,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
         final doc = products[index];
         final data = doc.data() as Map<String, dynamic>;
 
-        return _highVisibilityProductCard(
+        return ProductCardWidget(
           docId: doc.id,
           rawDoc: doc,
           name: data['name'] ?? 'Product',
@@ -1170,350 +994,10 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           category: data['category'] ?? '',
           imageBase64: data['imageBase64'] ?? '',
           imageUrl: data['imageUrl'] ?? '',
+          onEdit: _editProduct,
+          onDelete: _deleteProduct,
         );
       },
-    );
-  }
-
-  Widget _highVisibilityProductCard({
-    required String docId,
-    required QueryDocumentSnapshot rawDoc,
-    required String name,
-    required String brand,
-    required dynamic price,
-    required String unit,
-    required dynamic stock,
-    required List<dynamic> variants,
-    required String category,
-    required String imageBase64,
-    required String imageUrl,
-  }) {
-    final int stockQty = stock is int ? stock : int.tryParse('$stock') ?? 0;
-    final bool isOutOfStock = stockQty <= 0;
-    final bool isLowStock = stockQty > 0 && stockQty < 100;
-
-    Widget imageWidget;
-    if (imageBase64.isNotEmpty) {
-      try {
-        imageWidget = Image.memory(
-          base64Decode(imageBase64),
-          width: double.infinity,
-          height: double.infinity,
-          fit: BoxFit.cover,
-          errorBuilder: (_, __, ___) => Container(
-            color: const Color(0xFFE2E8F0),
-            child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
-          ),
-        );
-      } catch (_) {
-        imageWidget = Container(
-          color: const Color(0xFFE2E8F0),
-          child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
-        );
-      }
-    } else if (imageUrl.isNotEmpty) {
-      imageWidget = Image.network(
-        imageUrl,
-        width: double.infinity,
-        height: double.infinity,
-        fit: BoxFit.cover,
-        errorBuilder: (_, __, ___) => Container(
-          color: const Color(0xFFE2E8F0),
-          child: const Icon(Icons.broken_image, size: 28, color: Colors.grey),
-        ),
-      );
-    } else {
-      imageWidget = Container(
-        width: double.infinity,
-        height: double.infinity,
-        color: const Color(0xFFF1F5F9),
-        child: const Center(
-          child: Icon(Icons.storefront_rounded, color: Colors.grey, size: 36),
-        ),
-      );
-    }
-
-    Color stockBadgeBg = const Color(0xFF15803D);
-    Color stockBadgeText = Colors.white;
-    String stockText = 'Stock: $stockQty';
-
-    if (isOutOfStock) {
-      stockBadgeBg = const Color(0xFFDC2626);
-      stockBadgeText = Colors.white;
-      stockText = 'Out of Stock';
-    } else if (isLowStock) {
-      stockBadgeBg = const Color(0xFFD97706);
-      stockBadgeText = Colors.white;
-      stockText = 'Low: $stockQty left';
-    }
-
-    return GestureDetector(
-      onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
-      child: Container(
-        decoration: BoxDecoration(
-          color: Colors.white,
-          borderRadius: BorderRadius.circular(14),
-          border: Border.all(
-            color: cardGreenBorder,
-            width: 1.5,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.06),
-              blurRadius: 6,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12.5),
-          child: Stack(
-            children: [
-              Positioned.fill(
-                child: imageWidget,
-              ),
-              if (brand.isNotEmpty || category.isNotEmpty)
-                Positioned(
-                  top: 6,
-                  left: 6,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2.5),
-                    decoration: BoxDecoration(
-                      color: Colors.black.withOpacity(0.78),
-                      borderRadius: BorderRadius.circular(6),
-                      border: Border.all(color: Colors.white24, width: 0.6),
-                    ),
-                    child: Text(
-                      brand.isNotEmpty ? brand : category,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        color: Colors.white,
-                        fontSize: 9,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 0.2,
-                      ),
-                    ),
-                  ),
-                ),
-              Positioned(
-                top: 6,
-                right: 6,
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    GestureDetector(
-                      onTap: () => _editProduct(docId, rawDoc.data() as Map<String, dynamic>),
-                      child: Container(
-                        padding: const EdgeInsets.all(4.5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: const Color(0xFF60A5FA), width: 0.8),
-                        ),
-                        child: const Icon(
-                          Icons.edit_rounded,
-                          size: 13,
-                          color: Color(0xFF60A5FA),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 4),
-                    GestureDetector(
-                      onTap: () => _deleteProduct(docId, name),
-                      child: Container(
-                        padding: const EdgeInsets.all(4.5),
-                        decoration: BoxDecoration(
-                          color: Colors.black.withOpacity(0.75),
-                          shape: BoxShape.circle,
-                          border: Border.all(color: Colors.redAccent.withOpacity(0.8), width: 0.8),
-                        ),
-                        child: const Icon(
-                          Icons.delete_outline_rounded,
-                          size: 13,
-                          color: Colors.redAccent,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Positioned(
-                bottom: 0,
-                left: 0,
-                right: 0,
-                child: Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 7),
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      colors: [
-                        Colors.black.withOpacity(0.96),
-                        Colors.black.withOpacity(0.85),
-                        Colors.black.withOpacity(0.50),
-                        Colors.transparent,
-                      ],
-                      stops: const [0.0, 0.4, 0.8, 1.0],
-                      begin: Alignment.bottomCenter,
-                      end: Alignment.topCenter,
-                    ),
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Text(
-                        name,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: const TextStyle(
-                          fontWeight: FontWeight.w900,
-                          fontSize: 13,
-                          color: productNameGold,
-                          shadows: [
-                            Shadow(color: Colors.black, blurRadius: 4, offset: Offset(0, 1)),
-                          ],
-                        ),
-                      ),
-                      const SizedBox(height: 2),
-                      Row(
-                        crossAxisAlignment: CrossAxisAlignment.baseline,
-                        textBaseline: TextBaseline.alphabetic,
-                        children: [
-                          Text(
-                            '₹$price',
-                            style: const TextStyle(
-                              fontWeight: FontWeight.w900,
-                              fontSize: 14.5,
-                              color: Color(0xFF4ADE80),
-                              shadows: [
-                                Shadow(color: Colors.black, blurRadius: 4),
-                              ],
-                            ),
-                          ),
-                          if (unit.isNotEmpty) ...[
-                            const SizedBox(width: 3),
-                            Flexible(
-                              child: Text(
-                                '/ $unit',
-                                maxLines: 1,
-                                overflow: TextOverflow.ellipsis,
-                                style: const TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.bold,
-                                  color: Color(0xFFE2E8F0),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-                      const SizedBox(height: 3),
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                        decoration: BoxDecoration(
-                          color: stockBadgeBg,
-                          borderRadius: BorderRadius.circular(4),
-                          boxShadow: [
-                            BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 2),
-                          ],
-                        ),
-                        child: Text(
-                          stockText,
-                          maxLines: 1,
-                          style: TextStyle(
-                            fontSize: 9,
-                            fontWeight: FontWeight.w800,
-                            color: stockBadgeText,
-                            letterSpacing: 0.1,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildBottomSummaryPanel({
-    required int totalProducts,
-    required int pendingOrders,
-    required int totalOrders,
-    required double totalRevenue,
-  }) {
-    return Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: const Color(0xFFF1F5F9), width: 1.2),
-        boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 6),
-        ],
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Store Performance Summary',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textDark),
-              ),
-              Container(
-                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                decoration: BoxDecoration(
-                  color: const Color(0xFFEEF2FF),
-                  borderRadius: BorderRadius.circular(6),
-                ),
-                child: const Text('Live', style: TextStyle(fontSize: 9.5, color: primaryPurple, fontWeight: FontWeight.bold)),
-              ),
-            ],
-          ),
-          const Divider(height: 14, color: Color(0xFFF1F5F9)),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              _buildBottomStatItem('Total Items', '$totalProducts', Icons.inventory_2_outlined, primaryBlue),
-              _buildBottomStatItem('Active Orders', '$pendingOrders', Icons.pending_actions_rounded, Colors.deepOrange),
-              _buildBottomStatItem('Total Orders', '$totalOrders', Icons.shopping_bag_outlined, Colors.indigo),
-              _buildBottomStatItem('Revenue', '₹${totalRevenue.toStringAsFixed(0)}', Icons.currency_rupee_rounded, Colors.teal),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildBottomStatItem(String label, String value, IconData icon, Color color) {
-    return Expanded(
-      child: Column(
-        children: [
-          Container(
-            padding: const EdgeInsets.all(6),
-            decoration: BoxDecoration(
-              color: color.withOpacity(0.1),
-              borderRadius: BorderRadius.circular(8),
-            ),
-            child: Icon(icon, color: color, size: 16),
-          ),
-          const SizedBox(height: 3),
-          Text(
-            value,
-            style: const TextStyle(fontWeight: FontWeight.w800, fontSize: 12.5, color: textDark),
-          ),
-          Text(
-            label,
-            textAlign: TextAlign.center,
-            style: const TextStyle(fontSize: 9, color: Color(0xFF94A3B8), fontWeight: FontWeight.w500),
-          ),
-        ],
-      ),
     );
   }
 
