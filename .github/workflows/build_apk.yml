@@ -2,7 +2,9 @@ name: Build Android APK
 
 on:
   push:
-    branches: [ main ]
+    branches: 
+      - main
+      - backup-today # 👈 Ee branch add cheyyali
 
 permissions:
   contents: write
