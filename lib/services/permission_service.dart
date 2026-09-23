@@ -15,14 +15,14 @@ class OverlayPermissionHandler {
   // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే రింగ్‌టోన్‌తో సహా పైన పాప్-అప్ పంపే మెథడ్
   static Future<void> triggerOrderSoundNotification(String orderId, String customerName) async {
     const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
-      channelId, // 👈 Corrected Channel ID
+      channelId,
       channelName,
       channelDescription: 'High priority alerts for incoming merchant orders',
       importance: Importance.max,
       priority: Priority.max, // 👈 Max Priority
       fullScreenIntent: true, // 👈 ఫోన్ లాక్‌లో/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ రావడానికి
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('order_ringtone'), // 👈 ringtone
+      sound: RawResourceAndroidNotificationSound('order_ringtone'),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm, // 👈 ఫోన్ సైలెంట్‌లో ఉన్నా రింగ్‌టోన్ ప్లే అవ్వడానికి
       category: AndroidNotificationCategory.alarm,
@@ -38,12 +38,12 @@ class OverlayPermissionHandler {
     );
   }
 
-  // 🚀 Swiggy లాగా ఆటోమేటిక్‌గా Notification Channel క్రియేట్ చేసి Allow చేసే మెథడ్
+  // 🚀 Notification Channel క్రియేట్ చేసే మెథడ్
   static Future<void> setupNotificationChannel() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
-      channelId, // 👈 Corrected Channel ID
+      channelId,
       channelName,
       description: 'High priority alerts for incoming merchant orders',
       importance: Importance.max,
@@ -62,12 +62,11 @@ class OverlayPermissionHandler {
   static Future<void> startOrderForegroundService() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
-    // ఫస్ట్ ఛానెల్ సృష్టించడం
     await setupNotificationChannel();
 
     FlutterForegroundTask.init(
       androidNotificationOptions: AndroidNotificationOptions(
-        channelId: channelId, // 👈 Corrected Channel ID
+        channelId: channelId,
         channelName: 'Flash2Mart Merchant Service',
         channelDescription: 'Keeps store online for new real-time orders',
         channelImportance: NotificationChannelImportance.HIGH,
@@ -88,15 +87,14 @@ class OverlayPermissionHandler {
     );
   }
 
-  // 'Display Over Other Apps', Battery Optimization & Notification permissions అడిగే మెథడ్
+  // 🚀 'Display Over Other Apps', Battery Optimization, Auto-Start & Notification permissions అడిగే మెథడ్
   static Future<void> checkAndRequestOverlayPermission(BuildContext context) async {
-    if (kIsWeb) return;
-    if (defaultTargetPlatform != TargetPlatform.android) return;
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
     try {
       // 1. Display Over Other Apps Permission Check
-      PermissionStatus status = await Permission.systemAlertWindow.status;
-      if (!status.isGranted) {
+      PermissionStatus overlayStatus = await Permission.systemAlertWindow.status;
+      if (!overlayStatus.isGranted) {
         if (context.mounted) {
           await showDialog(
             context: context,
@@ -138,10 +136,48 @@ class OverlayPermissionHandler {
         }
       }
 
-      // 2. Battery Optimization Disable Request
+      // 2. Battery Optimization Disable Request (Recent Apps క్లియర్ చేసినా ప్రాసెస్ కిల్‌కాకుండా ఉండటానికి)
       PermissionStatus batteryStatus = await Permission.ignoreBatteryOptimizations.status;
       if (!batteryStatus.isGranted) {
-        await Permission.ignoreBatteryOptimizations.request();
+        if (context.mounted) {
+          await showDialog(
+            context: context,
+            barrierDismissible: false,
+            builder: (BuildContext context) {
+              return AlertDialog(
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                title: const Row(
+                  children: [
+                    Icon(Icons.battery_saver_rounded, color: Color(0xFF16A34A)),
+                    SizedBox(width: 10),
+                    Text('Disable Battery Saver', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                content: const Text(
+                  'Recent Apps తీసేసినా లేదా ఫోన్ క్లోజ్ అయి ఉన్నా కొత్త ఆర్డర్లు మిస్ అవ్వకుండా ఉండటానికి Battery Saver Exempt పర్మిషన్ అనుమతించండి.',
+                  style: TextStyle(fontSize: 13, height: 1.4),
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('SKIP', style: TextStyle(color: Colors.grey)),
+                  ),
+                  ElevatedButton(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFF16A34A),
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    ),
+                    onPressed: () async {
+                      Navigator.pop(context);
+                      await Permission.ignoreBatteryOptimizations.request();
+                    },
+                    child: const Text('ALLOW', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                  ),
+                ],
+              );
+            },
+          );
+        }
       }
 
       // 3. Notification Permission Check
