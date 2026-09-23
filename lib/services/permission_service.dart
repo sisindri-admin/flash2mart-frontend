@@ -5,23 +5,47 @@ import 'package:flutter_foreground_task/flutter_foreground_task.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 class OverlayPermissionHandler {
+  static final FlutterLocalNotificationsPlugin _notificationsPlugin =
+      FlutterLocalNotificationsPlugin();
+
+  // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే రింగ్‌టోన్‌తో సహా పైన పాప్-అప్ పంపే మెథడ్
+  static Future<void> triggerOrderSoundNotification(String orderId, String customerName) async {
+    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      'flash2mart_merchant_orders',
+      'New Order Alerts',
+      channelDescription: 'Notifications for new incoming store orders',
+      importance: Importance.max,
+      priority: Priority.high,
+      fullScreenIntent: true, // 👈 ఫోన్ స్క్రీన్ లాక్/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ తక్షణమే రావడానికి
+      playSound: true,
+      enableVibration: true,
+      category: AndroidNotificationCategory.call,
+    );
+
+    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+
+    await _notificationsPlugin.show(
+      DateTime.now().millisecondsSinceEpoch ~/ 1000,
+      '🚨 KOTHA ORDER VACHINDI!',
+      'Order ID: #$orderId - $customerName',
+      platformDetails,
+    );
+  }
+
   // 🚀 Swiggy లాగా ఆటోమేటిక్‌గా Notification Channel క్రియేట్ చేసి Allow చేసే మెథడ్
   static Future<void> setupNotificationChannel() async {
     if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
 
     const AndroidNotificationChannel channel = AndroidNotificationChannel(
       'flash2mart_merchant_orders', // Channel ID
-      'New Order Alerts', // Channel Name (సెట్టింగ్స్‌లో కనిపించే పేరు)
+      'New Order Alerts', // Channel Name
       description: 'Notifications for new incoming store orders',
       importance: Importance.max,
       playSound: true,
       enableVibration: true,
     );
 
-    final FlutterLocalNotificationsPlugin flutterLocalNotificationsPlugin =
-        FlutterLocalNotificationsPlugin();
-
-    await flutterLocalNotificationsPlugin
+    await _notificationsPlugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(channel);

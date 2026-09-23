@@ -46,7 +46,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     super.initState();
     _listenForNewOrders();
 
-    // 🚀 యాప్ మినిమైజ్ చేసినప్పుడు ఆర్డర్లు రావడం కోసం Foreground Task & Overlay Permission స్టార్ట్ అవుతుంది
+    // Foreground Task & Notification Permission check
     WidgetsBinding.instance.addPostFrameCallback((_) {
       OverlayPermissionHandler.checkAndRequestOverlayPermission(context);
     });
@@ -78,6 +78,14 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
           final String status = rawStatus.trim().toLowerCase();
 
           if ((status == 'pending' || status == 'placed' || status == 'ordered') && !_isPopupShowing) {
+            
+            // 🚀 1. Trigger Full Screen Notification & Sound for Background State
+            OverlayPermissionHandler.triggerOrderSoundNotification(
+              change.doc.id,
+              orderData['customerName'] ?? orderData['userName'] ?? 'Customer',
+            );
+
+            // 🚀 2. Show Modal Sheet inside App UI
             _showNewOrderBottomSheet(change.doc.id, orderData);
           }
         }
@@ -157,7 +165,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                   ],
                 ),
                 const Text(
-                  'Live GPS అడ్రస్ లేదా మీ సొంత అడ్రస్‌ను మాన్యువల్‌గా సెట్ చేసుకోండి:',
+                  'Live GPS address leda manual address set cheskondi:',
                   style: TextStyle(fontSize: 12, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 16),
@@ -193,7 +201,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                             ),
                             const SizedBox(height: 3),
                             const Text(
-                              'Google Maps ఆధారంగా తీసుకున్న లైవ్ అడ్రస్',
+                              'Google Maps live address',
                               style: TextStyle(fontSize: 10, color: Color(0xFF64748B)),
                             ),
                           ],
@@ -251,7 +259,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                   maxLines: 2,
                   style: const TextStyle(fontSize: 13, color: textDark),
                   decoration: InputDecoration(
-                    hintText: 'ఉదా: Shop No. 5, Opp. RTC Bus Stand, Trunk Road, Nellore',
+                    hintText: 'Eg: Shop No. 5, Opp. RTC Bus Stand, Trunk Road, Nellore',
                     hintStyle: const TextStyle(fontSize: 12, color: Color(0xFF94A3B8)),
                     prefixIcon: const Icon(Icons.edit_location_alt_outlined, color: primaryPurple, size: 20),
                     filled: true,
@@ -273,7 +281,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 ),
                 const SizedBox(height: 6),
                 const Text(
-                  'మాన్యువల్ అడ్రస్ ఎంటర్ చేస్తే అది సేవ్ అవుతుంది, లేకపోతే లైవ్ GPS అడ్రస్ సేవ్ అవుతుంది.',
+                  'Manual address enter cheste adhi save avtundi, lekapothe live GPS address save avtundi.',
                   style: TextStyle(fontSize: 10.5, color: Color(0xFF64748B)),
                 ),
                 const SizedBox(height: 20),
@@ -1552,7 +1560,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.layers_rounded, color: primaryBlue),
                 title: const Text('Display Over Other Apps Permission', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                subtitle: const Text('బ్యాక్‌గ్రౌండ్‌లో నోటిఫికేషన్లు పొందడానికి ఎనేబుల్ చేయండి', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                subtitle: const Text('Enable for background order alerts', style: TextStyle(fontSize: 11, color: Colors.grey)),
                 trailing: const Icon(Icons.chevron_right_rounded, color: primaryBlue),
                 onTap: () {
                   Navigator.pop(ctx);
@@ -1564,7 +1572,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
                 contentPadding: EdgeInsets.zero,
                 leading: const Icon(Icons.my_location_rounded, color: Colors.redAccent),
                 title: const Text('Edit / Update Shop Location', style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13.5)),
-                subtitle: const Text('Live GPS లేదా మాన్యువల్ అడ్రస్ సెట్ చేసుకోండి', style: TextStyle(fontSize: 11, color: Colors.grey)),
+                subtitle: const Text('Set live GPS or custom address', style: TextStyle(fontSize: 11, color: Colors.grey)),
                 trailing: const Icon(Icons.chevron_right_rounded, color: primaryBlue),
                 onTap: () {
                   Navigator.pop(ctx);
