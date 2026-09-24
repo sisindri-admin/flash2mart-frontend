@@ -24,8 +24,8 @@ class FCMService {
   // 🚀 Notification Channel Setup
   static const AndroidNotificationChannel _orderChannel =
       AndroidNotificationChannel(
-    'new_orders_v2',
-    'New Order Alerts',
+    'new_orders_v3',
+    'New Order Alerts v3',
     description: 'High priority alerts for incoming merchant orders',
     importance: Importance.max,
     playSound: true,

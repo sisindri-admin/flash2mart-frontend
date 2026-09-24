@@ -33,7 +33,7 @@
         <!-- 🚨 డిఫాల్ట్ నోటిఫికేషన్ ఛానెల్ ఐడీ (మిగతా అన్ని ఫైల్స్‌లోని 'new_orders' ఐడీతో మ్యాచ్ అవ్వాలి) -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="new_orders_v2" />
+            android:value="new_orders_v3" />
 
         <activity
             android:name=".MainActivity"
