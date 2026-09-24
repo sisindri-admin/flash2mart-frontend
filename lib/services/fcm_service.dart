@@ -140,14 +140,17 @@ class FCMService {
     final String customerName = message.data['customerName'] ??
         message.data['userName'] ??
         'Customer';
+    final String customerId = message.data['customerId'] ?? message.data['userId'] ?? 'CUST-101';
 
-    // 🚨 అమౌంట్ పెద్దగా, విజిబుల్‌గా ఉండేలా BigTextStyleStyleInformation వాడాను
+    // 🚨 Big Text Style with HTML formatting for Green & Large Amount
     BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
-      '💰 AMOUNT: ₹$amount\nCustomer: $customerName\n\nTap or wait 5 sec to accept order.',
+      '<br/><font color="#16A34A"><b><span style="font-size:24px;">💵 ₹$amount</span></b></font><br/><br/>'
+      '<font color="#64748B"><small>Customer ID: $customerId ($customerName)</small></font><br/>'
+      '<b>Tap or wait 5 sec to accept order.</b>',
       htmlFormatBigText: true,
-      contentTitle: '🚨 NEW ORDER RECEIVED!',
+      contentTitle: '<b>🚨 KOTHA ORDER VACHINDI!</b>',
       htmlFormatContentTitle: true,
-      summaryText: 'Flash2Mart Instant Order',
+      summaryText: 'Flash2Mart Instant Alert',
       htmlFormatSummaryText: true,
     );
 
@@ -157,11 +160,12 @@ class FCMService {
       _orderChannel.name,
       channelDescription: _orderChannel.description,
       importance: Importance.max,
-      priority: Priority.high,
-      styleInformation: bigTextStyleInformation, // 👈 Big Text Layout
+      priority: Priority.max,
+      styleInformation: bigTextStyleInformation, // 👈 Expandable Notification Card
       playSound: true,
       sound: const RawResourceAndroidNotificationSound('order_ringtone'),
       fullScreenIntent: true,
+      visibility: NotificationVisibility.public,
     );
 
     NotificationDetails platformChannelSpecifics =
@@ -169,8 +173,8 @@ class FCMService {
 
     _flutterLocalNotificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
-      '🚨 NEW ORDER RECEIVED!',
-      '💰 AMOUNT: ₹$amount ($customerName)',
+      '🚨 KOTHA ORDER VACHINDI!',
+      '💵 ₹$amount',
       platformChannelSpecifics,
       payload: message.data['orderId'] ?? '',
     );

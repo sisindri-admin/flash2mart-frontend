@@ -2,38 +2,52 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:flutter_foreground_task/flutter_foreground_task.dart';
-import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart' hide NotificationVisibility; // 👈 Import Collision ఎర్రర్ ఫిక్స్ చేయడానికి hide చేసాను
 
 class OverlayPermissionHandler {
   static final FlutterLocalNotificationsPlugin _notificationsPlugin =
       FlutterLocalNotificationsPlugin();
 
-  // 🚨 ఈ Channel ID మిగతా అన్ని ఫైల్స్‌లో వాడే ఐడీతో ఖచ్చితంగా మ్యాచ్ అవ్వాలి!
+  // 🚨 ఈ Channel ID మిగతా అన్ని ఫైల్స్‌లో వాడే 'new_orders_v2' తో ఖచ్చితంగా మ్యాచ్ అవ్వాలి!
   static const String channelId = 'new_orders_v2';
   static const String channelName = 'New Order Alerts v2';
 
-  // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే రింగ్‌టోన్‌తో సహా పైన పాప్-అప్ పంపే మెథడ్
-  static Future<void> triggerOrderSoundNotification(String orderId, String customerName) async {
-    const AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+  // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే బిగ్ గ్రీన్ అమౌంట్‌తో పైన పాప్-అప్ పంపే మెథడ్
+  static Future<void> triggerOrderSoundNotification(String orderId, String customerDetails) async {
+    
+    // 🚨 Big Text Style with HTML formatting for Green & Large Amount Accent
+    BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
+      '<br/><font color="#16A34A"><b><span style="font-size:24px;">💵 $customerDetails</span></b></font><br/><br/>'
+      '<font color="#64748B"><small>Order ID: #$orderId</small></font><br/>'
+      '<b>Tap or wait 5 sec to accept order.</b>',
+      htmlFormatBigText: true,
+      contentTitle: '<b>🚨 KOTHA ORDER VACHINDI!</b>',
+      htmlFormatContentTitle: true,
+      summaryText: 'Flash2Mart Instant Alert',
+      htmlFormatSummaryText: true,
+    );
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
       channelId,
       channelName,
       channelDescription: 'High priority alerts for incoming merchant orders',
       importance: Importance.max,
       priority: Priority.max, // 👈 Max Priority
+      styleInformation: bigTextStyleInformation, // 👈 Expandable Big Card Layout
       fullScreenIntent: true, // 👈 ఫోన్ లాక్‌లో/బ్యాక్‌గ్రౌండ్‌లో ఉన్నా పాప్-అప్ రావడానికి
       playSound: true,
-      sound: RawResourceAndroidNotificationSound('order_ringtone'),
+      sound: const RawResourceAndroidNotificationSound('order_ringtone'),
       enableVibration: true,
       audioAttributesUsage: AudioAttributesUsage.alarm, // 👈 ఫోన్ సైలెంట్‌లో ఉన్నా రింగ్‌టోన్ ప్లే అవ్వడానికి
       category: AndroidNotificationCategory.alarm,
     );
 
-    const NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+    NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
 
     await _notificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       '🚨 KOTHA ORDER VACHINDI!',
-      'Order ID: #$orderId - $customerName',
+      customerDetails,
       platformDetails,
     );
   }
@@ -69,13 +83,13 @@ class OverlayPermissionHandler {
         channelId: channelId,
         channelName: 'Flash2Mart Merchant Service',
         channelDescription: 'Keeps store online for new real-time orders',
-        channelImportance: NotificationChannelImportance.HIGH,
-        priority: NotificationPriority.HIGH,
+        channelImportance: NotificationChannelImportance.MAX,
+        priority: NotificationPriority.MAX,
       ),
       iosNotificationOptions: const IOSNotificationOptions(),
       foregroundTaskOptions: ForegroundTaskOptions(
         eventAction: ForegroundTaskEventAction.repeat(5000),
-        autoRunOnBoot: true,
+        autoRunOnBoot: true, // 👈 Phone reboot/start లో కూడా auto restart అవ్వడానికి
         allowWifiLock: true,
       ),
     );

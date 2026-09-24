@@ -68,6 +68,7 @@
             android:name="com.pravera.flutter_foreground_task.service.ForegroundService"
             android:foregroundServiceType="dataSync"
             android:exported="false"
+            android:enabled="true"
             android:stopWithTask="false" /> <!-- 👈 Recent Apps క్లియర్ చేసినా సర్వీస్ ఆగిపోకుండా ఉండటానికి -->
 
         <!-- 🚀 Device Reboot అయిన వెంటనే Background Service రన్ అవ్వడానికి Boot Receiver -->
