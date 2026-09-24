@@ -9,8 +9,8 @@ class OverlayPermissionHandler {
       FlutterLocalNotificationsPlugin();
 
   // 🚨 ఈ Channel ID మిగతా అన్ని ఫైల్స్‌లో వాడే ఐడీతో ఖచ్చితంగా మ్యాచ్ అవ్వాలి!
-  static const String channelId = 'new_orders';
-  static const String channelName = 'New Order Alerts';
+  static const String channelId = 'new_orders_v2';
+  static const String channelName = 'New Order Alerts v2';
 
   // 🚀 బ్యాక్‌గ్రౌండ్‌లో ఆర్డర్ రాగానే రింగ్‌టోన్‌తో సహా పైన పాప్-అప్ పంపే మెథడ్
   static Future<void> triggerOrderSoundNotification(String orderId, String customerName) async {

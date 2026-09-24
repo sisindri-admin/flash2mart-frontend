@@ -82,7 +82,7 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
     super.dispose();
   }
 
-  // --- REALTIME NEW ORDERS LISTENER ---
+  // --- REALTIME NEW ORDERS LISTENER (OPTIMIZED FOR FAST AUTO-OPEN) ---
   void _listenForNewOrders() {
     final user = FirebaseAuth.instance.currentUser;
     if (user == null) return;
@@ -102,14 +102,21 @@ class _MerchantDashboardState extends State<MerchantDashboard> {
 
           if ((status == 'pending' || status == 'placed' || status == 'ordered') && !_isPopupShowing) {
             
-            // 🚀 Trigger Notification & Ringtone sound with High Priority
+            final String customerName = orderData['customerName'] ?? orderData['userName'] ?? 'Customer';
+            final String totalAmount = (orderData['grandTotal'] ?? orderData['totalAmount'] ?? orderData['price'] ?? '0').toString();
+
+            // 🚀 Trigger Notification & Ringtone sound with Big Amount Accent
             OverlayPermissionHandler.triggerOrderSoundNotification(
               change.doc.id,
-              orderData['customerName'] ?? orderData['userName'] ?? 'Customer',
+              "$customerName (💰 ₹$totalAmount)",
             );
 
-            // Show Modal Sheet inside App UI if foreground
-            _showNewOrderBottomSheet(change.doc.id, orderData);
+            // 🚀 Fast Auto-Open: 0.5 సెకనులోనే డ్యాష్‌బోర్డ్ లో New Order Popup Sheet చూపించడం
+            Future.delayed(const Duration(milliseconds: 500), () {
+              if (mounted && !_isPopupShowing) {
+                _showNewOrderBottomSheet(change.doc.id, orderData);
+              }
+            });
           }
         }
       }
