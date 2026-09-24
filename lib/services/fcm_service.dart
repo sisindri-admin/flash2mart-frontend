@@ -5,6 +5,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+// 🚀 బ్యాక్‌గ్రౌండ్ మెసేజ్ హ్యాండ్లర్ (Top level function)
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   debugPrint("Handling background FCM message: ${message.messageId}");
@@ -20,6 +21,7 @@ class FCMService {
 
   GlobalKey<NavigatorState>? navigatorKey;
 
+  // 🚀 Notification Channel Setup
   static const AndroidNotificationChannel _orderChannel =
       AndroidNotificationChannel(
     'new_orders',
@@ -33,18 +35,25 @@ class FCMService {
   Future<void> initialize(GlobalKey<NavigatorState> navKey) async {
     navigatorKey = navKey;
 
-    await _fcm.requestPermission(
+    // 1. Notification Permissions అడగడం
+    NotificationSettings settings = await _fcm.requestPermission(
       alert: true,
       badge: true,
       sound: true,
       criticalAlert: true,
     );
 
+    if (settings.authorizationStatus == AuthorizationStatus.authorized) {
+      debugPrint('FCM Notification permission granted');
+    }
+
+    // 2. Android Notification Channel క్రియేట్ చేయడం
     await _flutterLocalNotificationsPlugin
         .resolvePlatformSpecificImplementation<
             AndroidFlutterLocalNotificationsPlugin>()
         ?.createNotificationChannel(_orderChannel);
 
+    // 3. Local Notifications Initialization
     const AndroidInitializationSettings initializationSettingsAndroid =
         AndroidInitializationSettings('@mipmap/ic_launcher');
 
@@ -58,22 +67,27 @@ class FCMService {
       },
     );
 
+    // 4. Background messaging handler
     FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
 
-    // 🚀 Foreground లో నాటిఫికేషన్ రాగానే 2 సెకన్లలో Auto Open చేయడం
+    // 5. Foreground Notification Handling (యాప్ ఓపెన్ లో ఉన్నప్పుడు)
     FirebaseMessaging.onMessage.listen((RemoteMessage message) {
+      debugPrint('Foreground Message: ${message.notification?.title}');
       _showForegroundLocalNotification(message);
-      
-      // 🚀 Delay లేకుండా 2 సెకన్లలో ఆటోమేటిక్‌గా డ్యాష్‌బోర్డ్ స్క్రీన్‌కి తీసుకెళ్లడం
+
+      // 🚀 2 నుండి 5 సెకన్లలో ఆటోమేటిక్‌గా డ్యాష్‌బోర్డ్ స్క్రీన్‌కి తీసుకెళ్లడం
       Future.delayed(const Duration(seconds: 2), () {
         _navigateToDashboard();
       });
     });
 
+    // 6. Notification Tap Handling (App in background)
     FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
+      debugPrint('Notification clicked from background!');
       _navigateToDashboard();
     });
 
+    // 7. Notification Tap Handling (App completely closed / terminated)
     RemoteMessage? initialMessage = await _fcm.getInitialMessage();
     if (initialMessage != null) {
       Future.delayed(const Duration(milliseconds: 500), () {
@@ -81,37 +95,55 @@ class FCMService {
       });
     }
 
+    // 8. Save FCM Token to Firestore
     await saveTokenToFirestore();
+
+    // 9. Listen for Token Refresh
+    _fcm.onTokenRefresh.listen((newToken) {
+      _updateTokenInFirestore(newToken);
+    });
   }
 
+  // 🚀 FCM Token ని Firestore 'merchants' కలెక్షన్‌లో సేవ్ చేయడం
   Future<void> saveTokenToFirestore() async {
     try {
       String? token = await _fcm.getToken();
       if (token != null) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          await FirebaseFirestore.instance
-              .collection('merchants')
-              .doc(user.uid)
-              .set({
-            'fcmToken': token,
-            'lastTokenUpdate': FieldValue.serverTimestamp(),
-          }, SetOptions(merge: true));
-        }
+        await _updateTokenInFirestore(token);
       }
     } catch (e) {
-      debugPrint("Error saving token: $e");
+      debugPrint("Error fetching FCM token: $e");
     }
   }
 
-  // 🚀 Big Style Notification with Order Amount
+  Future<void> _updateTokenInFirestore(String token) async {
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) return;
+
+    await FirebaseFirestore.instance
+        .collection('merchants')
+        .doc(user.uid)
+        .set({
+      'fcmToken': token,
+      'lastTokenUpdate': FieldValue.serverTimestamp(),
+    }, SetOptions(merge: true));
+
+    debugPrint("FCM Token successfully stored in Firestore: $token");
+  }
+
+  // 🚀 Big Text Style & Green Bold Amount తో Foreground Notification డిస్‌ప్లే చేయడం
   void _showForegroundLocalNotification(RemoteMessage message) {
-    final String orderId = message.data['orderId'] ?? 'New';
-    final String amount = message.data['totalAmount'] ?? message.data['grandTotal'] ?? '0';
+    final String amount = message.data['totalAmount'] ??
+        message.data['grandTotal'] ??
+        message.data['amount'] ??
+        '0';
+    final String customerName = message.data['customerName'] ??
+        message.data['userName'] ??
+        'Customer';
 
     // 🚨 అమౌంట్ పెద్దగా, విజిబుల్‌గా ఉండేలా BigTextStyleStyleInformation వాడాను
     BigTextStyleInformation bigTextStyleInformation = BigTextStyleInformation(
-      '💰 AMOUNT: ₹$amount\n\nTap or wait 5 sec to accept order.',
+      '💰 AMOUNT: ₹$amount\nCustomer: $customerName\n\nTap or wait 5 sec to accept order.',
       htmlFormatBigText: true,
       contentTitle: '🚨 NEW ORDER RECEIVED!',
       htmlFormatContentTitle: true,
@@ -138,8 +170,9 @@ class FCMService {
     _flutterLocalNotificationsPlugin.show(
       DateTime.now().millisecondsSinceEpoch ~/ 1000,
       '🚨 NEW ORDER RECEIVED!',
-      '💰 AMOUNT: ₹$amount',
+      '💰 AMOUNT: ₹$amount ($customerName)',
       platformChannelSpecifics,
+      payload: message.data['orderId'] ?? '',
     );
   }
 
